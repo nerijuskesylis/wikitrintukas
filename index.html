@@ -257,7 +257,7 @@
     <div class="box">
       <div class="money" id="money">0</div>
       <div class="sub" id="totalDone">Bendras užbaigimas: –</div>
-      <div class="sub" id="rate">0 raidžių/s · 1 už paspaudimą</div>
+      <div class="sub" id="rate">0 gyvybių/s · 1 už paspaudimą</div>
       <div class="bar"><i id="prog"></i></div>
       <div class="sub" id="progTxt">–</div>
       <label class="chk"><input type="checkbox" id="follow"> Sekti trintuką (slinkti puslapį)</label>
@@ -290,7 +290,7 @@
 
   /* ---------- parduotuvė ---------- */
   var SHOP = [
-    { id: "worker",  icon: "👷", name: "Trintukas",            desc: "trina 1 raidę per sekundę",       base: 40,    grow: 1.15 }
+    { id: "worker",  icon: "👷", name: "Trintukas",            desc: "trina 100 gyvybių per sekundę",   base: 4000,    grow: 1.15 }
   ];
 
   var S = { money: 0, total: 0, destroyed: 0, lang: "lt", scroll: false, up: {} };        // scroll: ar puslapis pats slenka paskui darbininkus (išjungta, kol neįjungsi)
@@ -300,7 +300,7 @@
 
   /* pradėtų (dar nebaigtų) straipsnių progresas: ištrintų taikinių atkarpos "r" ir apgadintų taikinių padaryta žala "d"; po 50 naujausių kiekvienai kalbai */
   var STARTED_MAX = 50, dirty = false;
-  var IMG_DIV = 50;      // nuotraukos gyvybės = pikselių skaičius / IMG_DIV
+  var HP_V = 2;        // gyvybių skaičiavimo versija (2: žodžiams Unicode numeriai, nuotraukoms, linijoms ir rėmeliams pikseliai)
   if (!S.prog) S.prog = {};
   var PROG_V = 2;      // keičiasi, kai pasikeičia taikinių sąrašas (2: rėmeliai gavo gyvybes); senesnis progresas nebetinka ir išmetamas
   Object.keys(S.prog).forEach(function (l) { Object.keys(S.prog[l]).forEach(function (k) { if (S.prog[l][k].v !== PROG_V) delete S.prog[l][k]; }); });
@@ -315,7 +315,7 @@
       if (it && it.hp < it.max) d.push([i, it.max - it.hp]);
     }
     var all = started();
-    all[norm(current.title)] = { v: PROG_V, img: IMG_DIV, t: current.title, r: r, d: d, pct: (1 - left / full) * 100, ts: Date.now() };
+    all[norm(current.title)] = { v: PROG_V, u: HP_V, t: current.title, r: r, d: d, pct: (1 - left / full) * 100, ts: Date.now() };
     Object.keys(all).sort(function (a, b) { return all[b].ts - all[a].ts; }).slice(STARTED_MAX).forEach(function (k) { delete all[k]; });
     dirty = false;
   }
@@ -324,10 +324,23 @@
     var p = started()[norm(title)];
     if (!p) return;
     p.r.forEach(function (x) { for (var i = x[0]; i <= x[1] && i < items.length; i++) left -= hit(i, items[i].hp); });
-    /* nuotraukai padaryta žala perskaičiuojama, jei išsaugota su kitu dalikliu (senuose įrašuose jo nėra: 1 gyvybė = 1 pikselis) */
-    p.d.forEach(function (x) { var it = items[x[0]]; if (it && it.hp > 0) left -= hit(x[0], Math.min(it.size ? Math.round(x[1] * (p.img || 1) / IMG_DIV) : x[1], it.hp - 1)); });
+    /* senesniame įraše žala išsaugota ankstesnėmis gyvybėmis, todėl atkuriama ta pati ištrinta dalis */
+    p.d.forEach(function (x) {
+      var it = items[x[0]];
+      if (!it || it.hp <= 0) return;
+      var d = p.u === HP_V ? x[1] : Math.round(x[1] / oldHp(it, p.img) * it.max);
+      left -= hit(x[0], Math.min(d, it.hp - 1));
+    });
     dirty = false;
     if (left <= 0) finished();
+  }
+  /* taikinio gyvybės pagal ankstesnį skaičiavimą; img – tuometinis nuotraukų pikselių daliklis */
+  function oldHp(it, img) {
+    if (it.word) return Math.ceil(it.word.length * it.mult);
+    if (it.size) return Math.ceil(it.size.w * it.size.h / (img || 1));
+    if (it.box) return Math.max(5, Math.ceil(it.area / 1000));
+    if (it.len !== undefined) return Math.max(1, Math.ceil(it.len / 20));
+    return 3;
   }
   var startedSig = "";
   function showStarted() {
@@ -352,7 +365,7 @@
   function lv(id) { return S.up[id] || 0; }
   function cost(u) { return Math.ceil(u.base * Math.pow(u.grow, lv(u.id))); }
   function perClick() { return 1; }
-  function perSec() { return lv("worker"); }
+  function perSec() { return 100 * lv("worker"); }       // vienas trintuko lygis – 100 gyvybių per sekundę
   function fmt(n) {
     if (n < 100000) return Math.floor(n).toLocaleString("lt-LT");
     if (n < 1e6) return (n / 1e3).toFixed(1) + " tūkst.";
@@ -391,7 +404,7 @@
   }
 
   /* Kiekvienas žodis, nuotrauka ir linija yra atskiras taikinys su gyvybėmis:
-     žodžio = raidžių skaičius × daugiklis už neįprastą išvaizdą; nuotraukos = plotis × aukštis pikseliais, padalinta iš IMG_DIV; linijos = 1 už 20 pikselių ilgio. */
+     žodžio = jo simbolių Unicode numerių suma × daugiklis už neįprastą išvaizdą; nuotraukos ir rėmelio = plotis × aukštis pikseliais; linijos = ilgis pikseliais. */
   var root = $("article");
   function addItem(el, hp, mult) {
     var it = { el: el, hp: hp, max: hp, mult: mult || 1, i: items.length };
@@ -461,8 +474,9 @@
     });
   }
 
-  function lineHp(el) { return Math.max(1, Math.ceil(el.getBoundingClientRect().width / 20)); }       // 1 gyvybė už 20 pikselių ilgio
-  function boxHp(el) { var r = el.getBoundingClientRect(); return Math.max(5, Math.ceil(r.width * (r.height || 0) / 1000)); }     // 1 gyvybė už 1000 pikselių ploto
+  function codes(text) { return Array.from(text).reduce(function (sum, c) { return sum + c.codePointAt(0); }, 0); }     // Unicode numerių suma: „a“ = 97, „ą“ = 261
+  function lineHp(el) { return Math.max(1, Math.round(el.getBoundingClientRect().width)); }       // 1 gyvybė už ilgio pikselį
+  function boxHp(el) { var r = el.getBoundingClientRect(); return Math.max(1, Math.round(r.width * (r.height || 0))); }     // 1 gyvybė už ploto pikselį
   /* rėmelis – elementas, kurį matyti ir be teksto: turi foną arba kraštus (lentelė, langelis, nuotraukos rėmas…) */
   function isBox(el) {
     if (!el.getClientRects().length) return false;
@@ -496,11 +510,11 @@
         return;
       }
       if (n.nodeType === 1) {
-        if (n.classList.contains("wbul")) { addItem(n, 3).mark = graphemes(n.textContent); return; }      // „12.“ – trys simboliai, „•“ – vienas
+        if (n.classList.contains("wbul")) { addItem(n, codes(n.textContent)).mark = graphemes(n.textContent); return; }      // „12.“ – trys simboliai, „•“ – vienas
         if (n.classList.contains("wline")) { addLine(n); return; }
         n.classList.add("wimg");
         if (n.tagName === "HR") addLine(n);
-        else { var size = imageSize(n); addItem(n, Math.ceil(size.w * size.h / IMG_DIV)).size = size; }
+        else { var size = imageSize(n); addItem(n, size.w * size.h).size = size; }
         return;
       }
       var parent = n.parentElement, m = cache.get(parent);
@@ -512,7 +526,7 @@
         words(part).forEach(function (word) {
           var span = document.createElement("span");
           span.className = "w"; span.textContent = word;
-          var it = addItem(span, Math.ceil(word.length * m), m); it.word = word;
+          var it = addItem(span, Math.ceil(codes(word) * m), m); it.word = word;
           frag.appendChild(span);
         });
       });
@@ -716,7 +730,7 @@
   /* sunaikinimo langas; naujas straipsnis prasideda tik paspaudus mygtuką (ar pasirinkus kitą straipsnį) */
   function showEnded(x) {
     resetPage(); $("title").textContent = ""; $("title").hidden = true;
-    body.innerHTML = '<div class="msg"><b>Straipsnis sunaikintas!</b>' + (x.full ? fmt(x.full) + ' raidžių' : '') +
+    body.innerHTML = '<div class="msg"><b>Straipsnis sunaikintas!</b>' + (x.full ? fmt(x.full) + ' gyvybių' : '') +
       (x.reward ? rewardText(x.reward) : '') +
       '<br><br><button class="primary" id="next">Kitas straipsnis</button></div>';
     $("next").onclick = randomArticle;
@@ -957,7 +971,9 @@
     if (it.len !== undefined) return 1 + bonus(T.linePx, "linePx") / 100;
     if (it.word) split(it);
     var chars = it.word ? it.chars : it.mark;       // žodis ar sąrašo numeris: kiekvienam simboliui sugaištama pagal jo paties premiją
-    return chars.length / chars.reduce(function (time, c) { return time + 1 / (1 + bonus(T.chars[c], "char") / 100); }, 0);
+    var all = 0, time = 0;
+    chars.forEach(function (c) { var hp = codes(c); all += hp; time += hp / (1 + bonus(T.chars[c], "char") / 100); });
+    return time ? all / time : 1;
   }
   /* įrašo smūgį į apskaitą */
   function record(it, before) {
@@ -1260,7 +1276,7 @@
     $("money").textContent = fmt(S.money);
     $("total").textContent = fmt(S.total);
     var r = perSec();
-    $("rate").textContent = (r < 10 ? Math.round(r * 10) / 10 : fmt(r)) + " raidžių/s · " + fmt(perClick()) + " už paspaudimą";
+    $("rate").textContent = (r < 10 ? Math.round(r * 10) / 10 : fmt(r)) + " gyvybių/s · " + fmt(perClick()) + " už paspaudimą";
     var pct = full ? (1 - Math.max(0, left) / full) * 100 : 0;
     $("prog").style.width = pct + "%";
     $("progTxt").textContent = full ? "Šis straipsnis: " + pct.toFixed(1) + " % · liko " + fmt(Math.max(0, left)) : "–";
