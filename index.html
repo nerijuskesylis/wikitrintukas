@@ -259,7 +259,7 @@
         <label><input type="radio" name="order" value="top"> ⬇ Iš viršaus į apačią</label>
         <label><input type="radio" name="order" value="bottom"> ⬆ Iš apačios į viršų</label>
         <label><input type="radio" name="order" value="random"> 🎲 Atsitiktinai</label>
-        <div class="sub">Galioja trintukams ir paspaudimui tuščioje vietoje. Atsitiktinai: elementas trinamas iki 1 s (nuotrauka – iki 2 s), tada traukiamas naujas; gali iškristi ir tas pats.</div>
+        <div class="sub">Galioja trintukams (paspaudimas visada muša atsitiktinį elementą). Atsitiktinai: elementas trinamas iki 1 s (nuotrauka – iki 2 s), tada traukiamas naujas; gali iškristi ir tas pats.</div>
       </fieldset>
       <fieldset id="foldSet">
         <legend>Ištrintos vietos</legend>
@@ -406,7 +406,8 @@
   function goneCount() { return Object.keys(S.gone[S.lang] || {}).length; }
   function lv(id) { return S.up[id] || 0; }
   function cost(u) { return Math.ceil(u.base * Math.pow(u.grow, lv(u.id))); }
-  function perClick() { return 1; }
+  /* paspaudimo jėga – dešimtadalis visų trintukų jėgos (premijos taikomos smūgiui pagal taikinį, kaip ir trintukams); be trintukų – 1 */
+  function perClick() { return Math.max(1, perSec() / 10); }
   function perSec() { return 100 * lv("worker"); }       // vienas trintuko lygis – 100 gyvybių per sekundę
   function fmt(n) {
     if (n < 100000) return Math.floor(n).toLocaleString("lt-LT");
@@ -1378,14 +1379,15 @@
     var it = itemAt(ev.target);
     return !it || it.box ? imageAt(ev.clientX, ev.clientY) || it : it;
   }
-  /* paspaudimas ant taikinio muša jį; tuščioje vietoje (bet kur, išskyrus viršų ir dešinį skydelį) – trinama iš eilės, kaip darbininkų */
+  /* paspaudimas (bet kur, išskyrus viršų ir dešinį skydelį) visada muša atsitiktinį dar neištrintą straipsnio elementą,
+     nepriklausomai nuo to, kur paspausta ir kokia trintukų tvarka pasirinkta */
   document.addEventListener("click", function (ev) {
     if (!ev.target.closest || ev.target.closest("header, aside, button") || !current || current.done) return;
     ev.preventDefault();
-    var it = itemUnder(ev), work = perClick() + clickRest, r;
+    var it = pickRandom(), work = perClick() + clickRest, r;
     mouseX = ev.clientX; mouseY = ev.clientY;
-    if (it && it.hp > 0) { hover = it; r = eraseAt(items.indexOf(it), work); }
-    else r = eraseNext(work);
+    if (!it) return;
+    r = eraseAt(it.i, work);
     clickRest = r.rest;       // premijos dalis, nesudaranti visos gyvybės, pereina į kitą paspaudimą
     pop(ev.clientX, ev.clientY, r.done);
     showBar(); render();
