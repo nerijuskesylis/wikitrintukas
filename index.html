@@ -1,0 +1,1330 @@
+<!doctype html>
+<!-- naršyklės vertimas išjungtas: vertėjas perrašo tekstą ir sugadina žaidimą (kiekvienas žodis yra atskiras taikinys su savo gyvybėmis) -->
+<html lang="lt" translate="no" class="notranslate">
+<head>
+<meta charset="utf-8">
+<meta name="google" content="notranslate">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wiki trintukas</title>
+<style>
+  :root { --text:#202122; --mute:#54595d; --link:#36c; --line:#a2a9b1; --soft:#f8f9fa; --red:#d33; --green:#14866d; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; background:#fff; color:var(--text); font:14px/1.6 -apple-system, "Segoe UI", Roboto, Lato, Helvetica, Arial, sans-serif; }
+
+  /* viršus */
+  header { position:sticky; top:0; z-index:10; display:flex; align-items:center; gap:16px; padding:8px 20px; background:#fff; border-bottom:1px solid #eaecf0; }
+  .brand { font:22px/1 "Linux Libertine", Georgia, "Times New Roman", serif; white-space:nowrap; }
+  .brand small { display:block; font:11px/1.4 "Segoe UI", sans-serif; color:var(--mute); }
+  .search { flex:1; max-width:520px; display:flex; gap:6px; }
+  input[type=search], select { font:inherit; padding:6px 10px; border:1px solid var(--line); border-radius:2px; background:#fff; color:var(--text); }
+  input[type=search] { flex:1; min-width:0; }
+  button { font:inherit; font-weight:600; padding:6px 12px; border:1px solid var(--line); border-radius:2px; background:var(--soft); color:var(--text); cursor:pointer; }
+  button:hover:not(:disabled) { background:#fff; border-color:#72777d; }
+  button:disabled { opacity:.45; cursor:default; }
+  button.primary { background:var(--link); border-color:var(--link); color:#fff; }
+  button.primary:hover:not(:disabled) { background:#447ff5; }
+  .head-stats { margin-left:auto; text-align:right; font-size:12px; color:var(--mute); white-space:nowrap; }
+
+  .layout { display:grid; grid-template-columns:minmax(0,1fr) 330px; gap:28px; max-width:1500px; margin:0 auto; padding:0 20px 60px; }
+
+  /* straipsnis (wiki išvaizda) */
+  #article { min-width:0; padding-top:14px; overflow-wrap:break-word; user-select:none; }
+  .w, .wimg, .wbul, .wline, .wbox { cursor:pointer; }
+  #article .wbox.hov { outline:2px dashed var(--link); outline-offset:-2px; }
+  #article .bare { border-color:transparent !important; background:transparent !important; box-shadow:none !important; cursor:default; }
+  #article .wthin:not(.bare)::before { content:""; position:absolute; left:0; right:0; top:-4px; bottom:-4px; }
+  .wbul { position:absolute; right:100%; top:0; padding:0 7px 0 6px; font-weight:400; }
+  #article[dir=rtl] .wbul { right:auto; left:100%; }
+  #article[dir=rtl] #body ul, #article[dir=rtl] #body ol { padding-left:0; padding-right:26px; }
+  #article[dir=rtl] #body .infobox, #article[dir=rtl] #body figure { float:left; clear:left; margin:0 20px 14px 0; }
+  .wbul:hover { background-color:rgba(51,102,204,.2); border-radius:3px; }
+  .wline { position:absolute; left:0; right:0; height:7px; display:block; }
+  .wline::after { content:""; position:absolute; left:0; right:0; top:3px; border-top:var(--bw) solid var(--bc); }
+  .wline:hover::after { border-top:3px solid var(--link); top:2px; }
+  .w { border-radius:2px; }
+  .w:hover { background-color:rgba(51,102,204,.14); }
+  /* kai rėmelyje nebelieka nė vieno taikinio, dingsta ir jis pats: linijos, fonas, lentelės kraštai, sąrašo taškai */
+  #article .dead, #article .dead::before, #article .dead::after { visibility:hidden !important; border-color:transparent !important; background:transparent !important; box-shadow:none !important; outline-color:transparent !important; }
+  hr.wimg { height:5px; border:0; border-top:1px solid var(--line); }
+  .w.dmg { background-image:linear-gradient(90deg, #1d4ed8 var(--hp), #c7d2fe var(--hp)); background-size:100% 3px; background-position:0 100%; background-repeat:no-repeat; }
+  .w .x { visibility:hidden; font-style:inherit; }
+  /* gyvybių juostos: #hpbar – po pele, #wbar – ties taikiniu, kurį trina darbininkai */
+  .hp { position:fixed; z-index:8; height:15px; border-radius:4px; background:#172554; overflow:hidden; pointer-events:none; box-shadow:0 1px 5px rgba(0,0,0,.3); }
+  .hp[hidden] { display:none; }
+  .hp i { display:block; height:100%; background:#1d4ed8; }
+  .hp.special i { background:#b45309; }
+  .hp span { position:absolute; inset:0; text-align:center; font:700 11px/15px "Segoe UI", sans-serif; color:#fff; white-space:nowrap; }
+  #wbar { z-index:7; }
+  /* užvedus pelę parodomas visas pradinis nuotraukos plotas, į kurį galima pataikyti */
+  #hframe { position:fixed; z-index:4; pointer-events:none; outline:2px dashed var(--link); }
+  #hframe[hidden] { display:none; }
+  #article.onimg, #article.onimg * { cursor:pointer; }
+  header button { white-space:nowrap; }
+  header .search { min-width:260px; }
+  /* kalbų sąrašas */
+  #langBox { position:relative; min-width:0; flex:0 1 190px; }
+  #lang { width:100%; overflow:hidden; text-overflow:ellipsis; text-align:left; font-weight:400; background:#fff; }
+  #langPanel { position:absolute; top:calc(100% + 4px); left:0; width:340px; max-height:calc(100vh - 80px); display:flex; flex-direction:column; background:#fff; border:1px solid var(--line); border-radius:4px; box-shadow:0 8px 24px rgba(0,0,0,.18); }
+  #langPanel[hidden] { display:none; }
+  #langFind { flex:none; margin:8px; }
+  #langList { overflow:auto; overscroll-behavior:contain; min-height:60px; }
+  .lgroup { padding:5px 10px; background:var(--soft); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--mute); }
+  #langList .lrow { display:block; width:100%; padding:5px 10px 7px; border:0; border-bottom:1px solid #eaecf0; border-radius:0; background:#fff; font-weight:400; text-align:left; line-height:1.4; }
+  #langList .lrow:hover { background:var(--soft); }
+  #langList .lrow.cur { background:#eaf3ff; }
+  .lname { display:block; overflow:hidden; text-overflow:ellipsis; }
+  .linfo { display:flex; justify-content:space-between; gap:8px; font-size:11px; color:var(--mute); font-variant-numeric:tabular-nums; }
+  .lbar { display:block; height:6px; margin-top:3px; background:#eaecf0; border-radius:3px; overflow:hidden; }
+  .lbar i { display:block; height:100%; width:0; background:#2e9d5b; }
+  #langNote { flex:none; padding:0 10px 6px; font-size:11px; line-height:1.35; }
+  .linfo em { margin-left:6px; font-style:normal; font-weight:700; color:var(--green); }
+  .linfo em.down { color:#a4511f; }
+  #langList .lrow.full .linfo em { color:#fff; }
+  /* 100 % sunaikinta: žalias visas kalbos langelis */
+  #langList .lrow.full { background:#2e9d5b; color:#fff; }
+  #langList .lrow.full:hover { background:#25804a; }
+  #langList .lrow.full .linfo { color:#fff; }
+  #langList .lrow.full .lbar { background:rgba(255,255,255,.35); }
+  #langList .lrow.full .lbar i { background:#fff; }
+  @media (max-width: 1450px) { .brand small { display:none; } }
+  @media (max-width: 1250px) { .head-stats { display:none; } }
+  @media (max-width: 1000px) { #orig { display:none; } }
+  /* nustatymai (krumpliaratis); taškas ant jo – progreso failui reikia dėmesio */
+  #setBox { position:relative; }
+  @media (max-width: 1250px) { #setBox { margin-left:auto; } }
+  #gear { position:relative; font-size:19px; line-height:1; padding:6px 10px; background:#fff; }
+  #gear.warn::after { content:""; position:absolute; top:-4px; right:-4px; width:11px; height:11px; border-radius:50%; background:#d97706; border:2px solid #fff; }
+  #setPanel { position:absolute; top:calc(100% + 4px); right:0; width:320px; max-height:calc(100vh - 80px); overflow:auto; padding:12px; background:#fff; border:1px solid var(--line); border-radius:4px; box-shadow:0 8px 24px rgba(0,0,0,.18); }
+  #setPanel[hidden] { display:none; }
+  #orderSet { display:grid; gap:6px; margin:0 0 12px; padding:0 0 12px; border:0; border-bottom:1px solid #eaecf0; }
+  #orderSet legend, #fileBox h5 { padding:0; margin:0 0 8px; font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--mute); }
+  #orderSet label { display:flex; align-items:center; gap:8px; cursor:pointer; }
+  #now { min-width:90px; flex:0 1 300px; line-height:1.3; }
+  #now small { display:block; font-size:11px; color:var(--mute); }
+  #now b { display:block; font:400 20px/1.3 "Linux Libertine", Georgia, "Times New Roman", serif; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #title { font:400 30px/1.25 "Linux Libertine", Georgia, "Times New Roman", serif; border-bottom:1px solid var(--line); margin:0 0 4px; padding-bottom:4px; }
+  .from { font-size:12px; color:var(--mute); margin-bottom:12px; }
+  #body { font-size:15px; display:flow-root; }
+  #body a { color:var(--link); text-decoration:none; }
+  #body a.new { color:var(--red); }
+  #body h2 { font:400 23px/1.3 "Linux Libertine", Georgia, serif; border-bottom:1px solid var(--line); margin:22px 0 8px; padding-bottom:2px; }
+  #body h3 { font-size:17px; margin:16px 0 4px; }
+  #body h4 { font-size:15px; margin:12px 0 4px; }
+  #body p { margin:8px 0; }
+  #body ul, #body ol { margin:6px 0; padding-left:26px; }
+  #body img { max-width:100%; height:auto; }
+  #body sup { font-size:11px; line-height:1; }
+  #body table { border-collapse:collapse; max-width:100%; }
+  #body .infobox { float:right; clear:right; width:290px; margin:0 0 14px 20px; padding:3px; border:1px solid var(--line); background:var(--soft); font-size:13px; line-height:1.45; }
+  #body .infobox th, #body .infobox td { padding:3px 6px; vertical-align:top; text-align:left; }
+  #body .infobox caption { font-weight:700; font-size:15px; padding:4px; }
+  #body .infobox .infobox-above, #body .infobox .infobox-header, #body .infobox .infobox-image { text-align:center; }
+  #body .wikitable { margin:12px 0; background:var(--soft); font-size:13px; }
+  #body .wikitable th, #body .wikitable td { border:1px solid var(--line); padding:4px 8px; }
+  #body .wikitable th { background:#eaecf0; }
+  #body figure { margin:6px 0 14px 20px; float:right; clear:right; border:1px solid #c8ccd1; background:var(--soft); padding:3px; display:table; }
+  #body figure.mw-halign-left { float:left; margin:6px 20px 14px 0; }
+  #body figcaption, #body .thumbcaption, #body .gallerytext, #body .infobox-caption { font-size:12px; line-height:1.4; padding:4px; }
+  #body figure > figcaption { display:table-caption; caption-side:bottom; }
+  #body .thumb.tright, #body .tright { float:right; clear:right; margin:4px 0 12px 20px; }
+  #body .thumb.tleft, #body .tleft { float:left; clear:left; margin:4px 20px 12px 0; }
+  #body .thumbinner { border:1px solid #c8ccd1; background:var(--soft); padding:3px; }
+  #body .gallery { display:flex; flex-wrap:wrap; gap:10px; padding:0; list-style:none; }
+  #body .gallerybox { width:160px; }
+  #body .reflist, #body .references { font-size:12px; line-height:1.5; }
+  #body .hatnote, #body .dablink { font-style:italic; padding-left:22px; font-size:13px; }
+  #body blockquote { margin:8px 30px; }
+  .msg { padding:40px 0; text-align:center; color:var(--mute); font-size:16px; }
+  .msg b { color:var(--green); display:block; font:400 28px Georgia, serif; margin-bottom:6px; }
+  .attr { margin-top:10px; border-top:1px solid #eaecf0; padding-top:8px; font-size:11px; color:var(--mute); }
+  #title[hidden] { display:none; }
+  .attr a { color:var(--link); }
+
+  /* žaidimo skydelis */
+  aside { align-self:start; position:sticky; top:62px; max-height:calc(100vh - 70px); overflow:auto; padding-top:14px; }
+  .box { border:1px solid var(--line); background:var(--soft); border-radius:2px; padding:12px; margin-bottom:12px; }
+  .money { font:700 30px/1.1 "Segoe UI", sans-serif; font-variant-numeric:tabular-nums; }
+  .sub { font-size:12px; color:var(--mute); }
+  .bar { height:8px; background:#eaecf0; border-radius:4px; overflow:hidden; margin:8px 0 4px; }
+  .bar i { display:block; height:100%; width:0; background:var(--red); }
+  h5 { margin:0 0 8px; font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--mute); }
+  .up { display:grid; grid-template-columns:30px 1fr auto; gap:8px; align-items:center; padding:7px 0; border-top:1px solid #eaecf0; }
+  .up:first-of-type { border-top:0; }
+  .up .ic { font-size:21px; text-align:center; }
+  .up b { font-size:13px; }
+  .up small { display:block; font-size:11px; color:var(--mute); line-height:1.35; }
+  .up button { min-width:78px; font-size:12px; font-variant-numeric:tabular-nums; }
+  .box[hidden] { display:none; }
+  #started { max-height:220px; overflow:auto; display:grid; gap:4px; }
+  #started button { display:flex; justify-content:space-between; gap:8px; width:100%; text-align:left; font-weight:400; font-size:13px; color:var(--link); background:#fff; }
+  #started button span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #started button b { color:var(--mute); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  label.chk { display:flex; gap:6px; align-items:center; font-size:13px; margin-top:8px; }
+  .totline { margin-top:8px; padding-top:8px; border-top:1px solid #eaecf0; }
+  #fileStatus.warn { color:#a4511f; font-weight:600; }
+  #fileStatus.ok { color:var(--green); }
+  #fileButtons { display:grid; gap:6px; margin-top:8px; }
+  #fileButtons button, #ghButtons button { width:100%; font-size:13px; }
+  #ghBox { margin-top:12px; padding-top:12px; border-top:1px solid #eaecf0; }
+  #ghBox h5 { font-size:13px; }
+  #ghStatus.warn { color:#a4511f; font-weight:600; }
+  #ghStatus.ok { color:var(--green); }
+  #ghForm { display:grid; gap:6px; margin-top:8px; }
+  #ghForm[hidden] { display:none; }
+  #ghForm input { width:100%; font:inherit; font-size:13px; padding:6px 8px; border:1px solid var(--line); border-radius:2px; }
+  #ghButtons { display:grid; gap:6px; margin-top:8px; }
+  /* ištrintų dalykų sąrašas */
+  #statsToggle { width:100%; }
+  #stats[hidden] { display:none; }
+  #stats table { width:100%; border-collapse:collapse; margin-top:10px; font-size:13px; }
+  #stats td { padding:3px 0; border-top:1px solid #eaecf0; }
+  #stats td + td { text-align:right; font-weight:700; font-variant-numeric:tabular-nums; }
+  #stats h5 { margin:12px 0 6px; }
+  #chars { display:grid; grid-template-columns:repeat(auto-fill, minmax(84px, 1fr)); gap:4px; max-height:320px; overflow:auto; }
+  #chars div { display:flex; justify-content:space-between; align-items:baseline; gap:6px; padding:2px 6px; background:#fff; border:1px solid #eaecf0; border-radius:2px; }
+  #chars b { font:600 16px/1.4 Georgia, "Times New Roman", serif; }
+  #chars span { margin-left:auto; font-size:12px; color:var(--mute); font-variant-numeric:tabular-nums; }
+  #chars div.up1 { border-color:var(--green); }
+  #stats em { margin-left:6px; font-style:normal; font-size:11px; font-weight:700; color:var(--green); white-space:nowrap; }
+  #chars div { flex-wrap:wrap; column-gap:6px; row-gap:0; min-width:0; }      /* netilpusi premija nukeliama į antrą eilutę */
+  #chars em { margin-left:auto; }
+  #chars span { white-space:nowrap; }
+  @media (max-width: 900px) { .layout { grid-template-columns:1fr; } aside { position:static; max-height:none; order:-1; } .head-stats { display:none; } #body .infobox, #body figure { float:none; margin:0 auto 12px; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">Wiki trintukas<small>bandomoji versija · tikri straipsniai</small></div>
+  <div id="now"><small id="nowLabel">Dabar trinama</small><b id="nowTitle">–</b></div>
+  <form class="search" id="searchForm">
+    <input type="search" id="q" list="hits" placeholder="Ieškoti straipsnio…" autocomplete="off">
+    <datalist id="hits"></datalist>
+    <button type="submit">Atverti</button>
+  </form>
+  <div id="langBox">
+    <button type="button" id="lang" title="Vikipedijos kalba" aria-haspopup="true" aria-expanded="false">Kalba ▾</button>
+    <div id="langPanel" hidden>
+      <input type="search" id="langFind" placeholder="Ieškoti kalbos…" autocomplete="off">
+      <div class="sub" id="langNote"></div>
+      <div id="langList"></div>
+    </div>
+  </div>
+  <button id="rnd" class="primary">🎲 Atsitiktinis</button>
+  <button id="orig" disabled title="Atveria tikrą šį straipsnį Vikipedijoje naujame skirtuke">↗ Eiti į originalų straipsnį</button>
+  <div class="head-stats"><div id="wikiLeft">–</div><div>Sunaikinta straipsnių: <b id="destroyed">0</b></div></div>
+  <div id="setBox">
+    <button type="button" id="gear" title="Nustatymai" aria-label="Nustatymai" aria-haspopup="true" aria-expanded="false">⚙</button>
+    <div id="setPanel" hidden>
+      <fieldset id="orderSet">
+        <legend>Trynimo tvarka</legend>
+        <label><input type="radio" name="order" value="top"> ⬇ Iš viršaus į apačią</label>
+        <label><input type="radio" name="order" value="bottom"> ⬆ Iš apačios į viršų</label>
+        <label><input type="radio" name="order" value="random"> 🎲 Atsitiktinai</label>
+        <div class="sub">Galioja trintukams ir paspaudimui tuščioje vietoje. Atsitiktinai: elementas trinamas iki 1 s (nuotrauka – iki 2 s), tada traukiamas naujas; gali iškristi ir tas pats.</div>
+      </fieldset>
+      <div id="fileBox">
+        <h5>Progreso failas</h5>
+        <div class="sub" id="fileStatus"></div>
+        <div id="fileButtons"></div>
+      </div>
+      <div id="ghBox">
+        <h5>Sinchronizavimas per GitHub</h5>
+        <div class="sub" id="ghStatus"></div>
+        <div id="ghForm">
+          <input type="text" id="ghRepo" placeholder="vardas/saugykla" autocomplete="off" spellcheck="false" aria-label="GitHub saugykla">
+          <input type="password" id="ghToken" placeholder="žetonas (github_pat_…)" autocomplete="off" aria-label="GitHub žetonas">
+        </div>
+        <div id="ghButtons"></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+  <main id="article">
+    <h1 id="title">…</h1>
+    <div id="body"><div class="msg">Kraunama…</div></div>
+  </main>
+
+  <aside>
+    <div class="box">
+      <div class="money" id="money">0</div>
+      <div class="sub" id="totalDone">Bendras užbaigimas: –</div>
+      <div class="sub" id="rate">0 raidžių/s · 1 už paspaudimą</div>
+      <div class="bar"><i id="prog"></i></div>
+      <div class="sub" id="progTxt">–</div>
+      <label class="chk"><input type="checkbox" id="follow"> Sekti trintuką (slinkti puslapį)</label>
+      <div class="sub totline">Iš viso ištrinta: <b id="total">0</b></div>
+    </div>
+    <div class="box"><h5>Patobulinimai</h5><div id="shop"></div></div>
+    <div class="box">
+      <button id="statsToggle" type="button" aria-controls="stats"></button>
+      <div id="stats" hidden>
+        <table><tbody id="statRows"></tbody></table>
+        <h5 id="charsHead">Simboliai</h5>
+        <div id="chars"></div>
+        <div class="sub totline" id="statsSince"></div>
+      </div>
+    </div>
+    <div class="box" id="startedBox" hidden><h5>Pradėti straipsniai</h5><div id="started"></div></div>
+  </aside>
+</div>
+
+<div id="hpbar" class="hp" hidden><i></i><span></span></div>
+<div id="wbar" class="hp" hidden><i></i><span></span></div>
+<div id="hframe" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var KEY = "wikitrintukas_v2";          // pakeitus numerį žaidimas pradedamas iš naujo (senas progresas lieka naršyklėje po senu raktu)
+
+  /* ---------- parduotuvė ---------- */
+  var SHOP = [
+    { id: "worker",  icon: "👷", name: "Trintukas",            desc: "trina 1 raidę per sekundę",       base: 40,    grow: 1.15 }
+  ];
+
+  var S = { money: 0, total: 0, destroyed: 0, lang: "lt", scroll: false, up: {} };        // scroll: ar puslapis pats slenka paskui darbininkus (išjungta, kol neįjungsi)
+  try { var saved = JSON.parse(localStorage.getItem(KEY)); if (saved) for (var k in saved) S[k] = saved[k]; } catch (e) {}
+  var frozen = false;       // įkeliant progresą iš failo dabartinis nebeįrašomas, kad neužrašytų įkelto
+  function save() { if (frozen) return; snapshot(); try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+
+  /* pradėtų (dar nebaigtų) straipsnių progresas: ištrintų taikinių atkarpos "r" ir apgadintų taikinių padaryta žala "d"; po 50 naujausių kiekvienai kalbai */
+  var STARTED_MAX = 50, dirty = false;
+  var IMG_DIV = 50;      // nuotraukos gyvybės = pikselių skaičius / IMG_DIV
+  if (!S.prog) S.prog = {};
+  var PROG_V = 2;      // keičiasi, kai pasikeičia taikinių sąrašas (2: rėmeliai gavo gyvybes); senesnis progresas nebetinka ir išmetamas
+  Object.keys(S.prog).forEach(function (l) { Object.keys(S.prog[l]).forEach(function (k) { if (S.prog[l][k].v !== PROG_V) delete S.prog[l][k]; }); });
+  function started() { return S.prog[S.lang] || (S.prog[S.lang] = {}); }
+  function snapshot() {
+    if (!dirty || !current || current.done || !items.length || left >= full) return;
+    var r = [], d = [], i, it, from = -1;
+    for (i = 0; i <= items.length; i++) {
+      it = items[i];
+      if (it && it.hp <= 0) { if (from < 0) from = i; continue; }
+      if (from >= 0) { r.push([from, i - 1]); from = -1; }
+      if (it && it.hp < it.max) d.push([i, it.max - it.hp]);
+    }
+    var all = started();
+    all[norm(current.title)] = { v: PROG_V, img: IMG_DIV, t: current.title, r: r, d: d, pct: (1 - left / full) * 100, ts: Date.now() };
+    Object.keys(all).sort(function (a, b) { return all[b].ts - all[a].ts; }).slice(STARTED_MAX).forEach(function (k) { delete all[k]; });
+    dirty = false;
+  }
+  /* atidarius pradėtą straipsnį atkuriama tai, kas jame jau buvo ištrinta (premijos ir raidės antrą kartą neduodamos) */
+  function restore(title) {
+    var p = started()[norm(title)];
+    if (!p) return;
+    p.r.forEach(function (x) { for (var i = x[0]; i <= x[1] && i < items.length; i++) left -= hit(i, items[i].hp); });
+    /* nuotraukai padaryta žala perskaičiuojama, jei išsaugota su kitu dalikliu (senuose įrašuose jo nėra: 1 gyvybė = 1 pikselis) */
+    p.d.forEach(function (x) { var it = items[x[0]]; if (it && it.hp > 0) left -= hit(x[0], Math.min(it.size ? Math.round(x[1] * (p.img || 1) / IMG_DIV) : x[1], it.hp - 1)); });
+    dirty = false;
+    if (left <= 0) finished();
+  }
+  var startedSig = "";
+  function showStarted() {
+    var all = started(), now = current && !current.done ? norm(current.title) : "";
+    var keys = Object.keys(all).filter(function (k) { return k !== now; }).sort(function (a, b) { return all[b].ts - all[a].ts; });
+    var sig = S.lang + "|" + keys.map(function (k) { return k + ":" + all[k].pct.toFixed(1); }).join("|");
+    if (sig === startedSig) return;
+    startedSig = sig; $("startedBox").hidden = !keys.length; $("started").textContent = "";
+    keys.forEach(function (k) {
+      var b = document.createElement("button"), n = document.createElement("span"), pc = document.createElement("b");
+      n.textContent = all[k].t; pc.textContent = all[k].pct.toFixed(1) + " %"; b.title = "Tęsti: " + all[k].t;
+      b.appendChild(n); b.appendChild(pc); b.onclick = function () { load(all[k].t); };
+      $("started").appendChild(b);
+    });
+  }
+  /* sunaikinti straipsniai (atskirai kiekvienai kalbai): jie nebesikartoja ir atrodo ištrinti */
+  if (!S.gone) S.gone = {};
+  function norm(t) { t = String(t).replace(/_/g, " ").replace(/\s+/g, " ").trim(); return t.charAt(0).toUpperCase() + t.slice(1); }
+  function isGone(t) { return Object.prototype.hasOwnProperty.call(S.gone[S.lang] || {}, norm(t)); }
+  function markGone(t) { (S.gone[S.lang] || (S.gone[S.lang] = {}))[norm(t)] = 1; }
+  function goneCount() { return Object.keys(S.gone[S.lang] || {}).length; }
+  function lv(id) { return S.up[id] || 0; }
+  function cost(u) { return Math.ceil(u.base * Math.pow(u.grow, lv(u.id))); }
+  function perClick() { return 1; }
+  function perSec() { return lv("worker"); }
+  function fmt(n) {
+    if (n < 100000) return Math.floor(n).toLocaleString("lt-LT");
+    if (n < 1e6) return (n / 1e3).toFixed(1) + " tūkst.";
+    if (n < 1e9) return (n / 1e6).toFixed(2) + " mln.";
+    return (n / 1e9).toFixed(2) + " mlrd.";
+  }
+
+  /* ---------- Vikipedijos API (tik skaitymas) ---------- */
+  function api(params) {
+    var u = "https://" + S.lang + ".wikipedia.org/w/api.php?format=json&formatversion=2&origin=*";
+    for (var k in params) u += "&" + k + "=" + encodeURIComponent(params[k]);
+    return fetch(u).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+  }
+
+  /* ---------- straipsnis ---------- */
+  var body = $("body"), items = [], pos = 0, left = 0, full = 0, current = null, loading = false;
+
+  function clean(html) {
+    var doc = new DOMParser().parseFromString(html, "text/html");          // inertiškas dokumentas: niekas nevykdoma
+    doc.querySelectorAll("script,style,link,meta,iframe,object,embed,form,input,audio,video,noscript," +
+      ".mw-editsection,.navbox,.vertical-navbox,.metadata,.noprint,.mw-empty-elt,.sortkey,.mw-references-wrap + .navbox,[style*='display:none'],[style*='display: none']").forEach(function (n) { n.remove(); });
+    doc.querySelectorAll("*").forEach(function (el) {
+      [].slice.call(el.attributes).forEach(function (a) {
+        if (/^on/i.test(a.name) || (/^(href|src|xlink:href)$/i.test(a.name) && /^\s*(javascript|data:text)/i.test(a.value))) el.removeAttribute(a.name);
+      });
+      if (el.tagName === "IMG") {
+        el.removeAttribute("srcset"); el.setAttribute("draggable", "false");
+        var src = el.getAttribute("src") || "";
+        if (src.indexOf("//") === 0) el.setAttribute("src", "https:" + src);
+        else if (src.charAt(0) === "/") el.setAttribute("src", "https://" + S.lang + ".wikipedia.org" + src);
+      }
+      if (el.tagName === "A") el.removeAttribute("href"), el.classList.add("lnk");
+      if (el.id === "title" || el.id === "body") el.removeAttribute("id");
+    });
+    return doc.body;
+  }
+
+  /* Kiekvienas žodis, nuotrauka ir linija yra atskiras taikinys su gyvybėmis:
+     žodžio = raidžių skaičius × daugiklis už neįprastą išvaizdą; nuotraukos = plotis × aukštis pikseliais, padalinta iš IMG_DIV; linijos = 1 už 20 pikselių ilgio. */
+  var root = $("article");
+  function addItem(el, hp, mult) {
+    var it = { el: el, hp: hp, max: hp, mult: mult || 1, i: items.length };
+    el._item = it; items.push(it); left += hp;
+    return it;
+  }
+
+  /* daugiklis: kuo tekstas labiau skiriasi nuo paprasto (dydis, storumas, pasvirimas, spalva, šriftas), tuo daugiau gyvybių */
+  function multiplier(el, base) {
+    var s = getComputedStyle(el), m = 1, size = parseFloat(s.fontSize) / parseFloat(base.fontSize);
+    if (size > 1.05) m *= Math.max(1.5, size); else if (size < 0.95) m *= 1.2;
+    if ((parseInt(s.fontWeight, 10) || 400) >= 600) m *= 2;
+    if (s.fontStyle !== "normal") m *= 1.5;
+    if (s.color !== base.color) m *= 1.5;
+    if (s.fontFamily !== base.fontFamily) m *= 1.5;
+    return Math.round(m * 10) / 10;
+  }
+
+  function imageSize(img) {
+    var r = img.getBoundingClientRect();
+    var w = parseInt(img.getAttribute("width"), 10) || Math.round(r.width) || img.naturalWidth || 20;
+    var h = parseInt(img.getAttribute("height"), 10) || Math.round(r.height) || img.naturalHeight || 20;
+    return { w: Math.max(1, w), h: Math.max(1, h) };
+  }
+
+  /* nuotrauka ėdama po vieną pikselį „gyvatėle": pirma eilutė nuo viršaus iš kairės į dešinę, antra iš dešinės į kairę ir t. t.
+     Grąžina likusios dalies kontūrą (CSS clip-path), kai suėsta n pikselių iš w × h. */
+  function snakeClip(n, w, h) {
+    var row = Math.floor(n / w), rem = n - row * w, back = row % 2 === 1;
+    var x = function (v) { return (v / w * 100).toFixed(3) + "% "; }, y = function (v) { return (Math.min(v, h) / h * 100).toFixed(3) + "%"; };
+    var pts = back
+      ? [x(0) + y(row), x(w - rem) + y(row), x(w - rem) + y(row + 1), x(w) + y(row + 1), x(w) + y(h), x(0) + y(h)]
+      : [x(rem) + y(row), x(w) + y(row), x(w) + y(h), x(0) + y(h), x(0) + y(row + 1), x(rem) + y(row + 1)];
+    return "polygon(" + pts.join(", ") + ")";
+  }
+
+  function visible(color) { return color && color !== "transparent" && !/rgba\([^)]*,\s*0\)$/.test(color); }
+
+  /* sąrašo taškai ir horizontalios linijos naršyklėje nėra atskiri elementai, todėl pakeičiami tikrais, kuriuos galima trinti */
+  function decorate(top) {
+    var all = [top].concat([].slice.call(top.querySelectorAll("*")));
+    all.forEach(function (el) {
+      if (!el.getClientRects().length) return;
+      var s = getComputedStyle(el);
+      /* šone plaukiantys elementai (informacinė lentelė, nuotraukos) turi būti virš teksto rėmelių, nes šie tęsiasi po jais ir perimtų paspaudimus */
+      if (s.cssFloat && s.cssFloat !== "none") { if (s.position === "static") el.style.position = "relative"; el.style.zIndex = "1"; }
+      if (el.tagName === "LI" && s.display === "list-item" && s.listStyleType !== "none") {
+        var b = document.createElement("span"), list = el.parentElement;
+        b.className = "wbul";
+        if (list && list.tagName === "OL") b.textContent = ((parseInt(list.getAttribute("start"), 10) || 1) + [].filter.call(list.children, function (c) { return c.tagName === "LI"; }).indexOf(el)) + ".";
+        else b.textContent = s.listStyleType === "circle" ? "◦" : s.listStyleType === "square" ? "▪" : "•";
+        el.style.listStyleType = "none"; if (s.position === "static") el.style.position = "relative";
+        el.insertBefore(b, el.firstChild);
+      }
+      if (/^(TABLE|TBODY|THEAD|TFOOT|TR|IMG|HR|BR)$/.test(el.tagName) || parseFloat(s.borderLeftWidth) > 0 || parseFloat(s.borderRightWidth) > 0) return;    // rėmeliai ir lentelių kraštai dingsta kartu su turiniu
+      ["Top", "Bottom"].forEach(function (side) {
+        var wd = parseFloat(s["border" + side + "Width"]), color = s["border" + side + "Color"];
+        if (!(wd > 0) || s["border" + side + "Style"] === "none" || !visible(color)) return;
+        var line = document.createElement("span");
+        line.className = "wline"; line.style.setProperty("--bw", wd + "px"); line.style.setProperty("--bc", color);
+        line.style[side.toLowerCase()] = side === "Top" ? (-wd - 3) + "px" : "-4px";
+        el.style["border" + side + "Color"] = "transparent";
+        if (s.position === "static") el.style.position = "relative";
+        if (s.display === "block") el.style.display = "flow-root";          // linija baigiasi ties šone esančia lentele, o ne eina per ją
+        if (side === "Top") el.insertBefore(line, el.firstChild); else el.appendChild(line);
+      });
+    });
+  }
+
+  function lineHp(el) { return Math.max(1, Math.ceil(el.getBoundingClientRect().width / 20)); }       // 1 gyvybė už 20 pikselių ilgio
+  function boxHp(el) { var r = el.getBoundingClientRect(); return Math.max(5, Math.ceil(r.width * (r.height || 0) / 1000)); }     // 1 gyvybė už 1000 pikselių ploto
+  /* rėmelis – elementas, kurį matyti ir be teksto: turi foną arba kraštus (lentelė, langelis, nuotraukos rėmas…) */
+  function isBox(el) {
+    if (!el.getClientRects().length) return false;
+    var s = getComputedStyle(el);
+    if (visible(s.backgroundColor) || (s.backgroundImage && s.backgroundImage !== "none")) return true;
+    var sides = /^(TABLE|TD|TH)$/.test(el.tagName) ? ["Left", "Right", "Top", "Bottom"] : ["Left", "Right"];
+    return sides.some(function (side) { return parseFloat(s["border" + side + "Width"]) > 0 && s["border" + side + "Style"] !== "none" && visible(s["border" + side + "Color"]); });
+  }
+
+  function addLine(el) { addItem(el, lineHp(el)).len = Math.round(el.getBoundingClientRect().width); }
+  function collect() {
+    items = []; pos = 0; left = 0;
+    var base = getComputedStyle(body), found = [];
+    [$("title"), body].forEach(function (top) {                 // pirmiausia pavadinimas, tada visas straipsnis
+      decorate(top); top._live = 0;
+      [].slice.call(top.childNodes).forEach(visit);
+    });
+    /* rėmelis į sąrašą įrašomas po viso savo turinio, todėl darbininkai pirma ištrina turinį, o tada patį rėmelį */
+    function visit(n) {
+      if (n.nodeType === 3) { if (/\S/.test(n.nodeValue) && n.parentElement.getClientRects().length) found.push(n); return; }
+      if (n.nodeType !== 1) return;
+      if (n.tagName === "IMG" || n.tagName === "HR" || n.classList.contains("wbul") || n.classList.contains("wline")) { found.push(n); return; }
+      [].slice.call(n.childNodes).forEach(visit);
+      if (isBox(n)) found.push({ box: n });
+    }
+    var cache = new Map();
+    found.forEach(function (n) {
+      if (n.box) {
+        n.box.classList.add("wbox"); var bi = addItem(n.box, boxHp(n.box)), br = n.box.getBoundingClientRect(); bi.box = true; bi.area = Math.round(br.width * br.height);
+        if (n.box.getBoundingClientRect().height < 10) { n.box.classList.add("wthin"); if (getComputedStyle(n.box).position === "static") n.box.style.position = "relative"; }      // plona juostelė: didesnis plotas pataikyti
+        return;
+      }
+      if (n.nodeType === 1) {
+        if (n.classList.contains("wbul")) { addItem(n, 3).mark = graphemes(n.textContent); return; }      // „12.“ – trys simboliai, „•“ – vienas
+        if (n.classList.contains("wline")) { addLine(n); return; }
+        n.classList.add("wimg");
+        if (n.tagName === "HR") addLine(n);
+        else { var size = imageSize(n); addItem(n, Math.ceil(size.w * size.h / IMG_DIV)).size = size; }
+        return;
+      }
+      var parent = n.parentElement, m = cache.get(parent);
+      if (m === undefined) { m = multiplier(parent, base); cache.set(parent, m); }
+      var frag = document.createDocumentFragment();
+      n.nodeValue.split(/(\s+)/).forEach(function (part) {
+        if (!part) return;
+        if (/^\s+$/.test(part)) { frag.appendChild(document.createTextNode(part)); return; }
+        words(part).forEach(function (word) {
+          var span = document.createElement("span");
+          span.className = "w"; span.textContent = word;
+          var it = addItem(span, Math.ceil(word.length * m), m); it.word = word;
+          frag.appendChild(span);
+        });
+      });
+      parent.replaceChild(frag, n);
+    });
+    /* kiek gyvų taikinių yra kiekviename rėmelyje (pastraipoje, lentelėje, antraštėje…): kai nebelieka nė vieno, dingsta ir pats rėmelis su linijomis bei fonu */
+    items.forEach(function (it) { it.el.parentElement && eachBox(it.el, function (box) { box._live = 0; }); });
+    items.forEach(function (it) { eachBox(it.el, function (box) { box._live++; }); });
+    full = left;
+    /* tvarka „iš apačios į viršų“: elementai atvirkščiai, bet rėmelis, kaip ir einant iš viršaus, po savo turinio */
+    back = []; bpos = 0;
+    var upward = function (el) { for (var c = el.lastElementChild; c; c = c.previousElementSibling) upward(c); if (el._item) back.push(el._item); };
+    [body, $("title")].forEach(function (top) { for (var c = top.lastElementChild; c; c = c.previousElementSibling) upward(c); });
+    pool = items.slice(); randomItem = null;
+  }
+  function eachBox(el, f) { for (var p = el.parentElement; p && p !== root; p = p.parentElement) f(p); }
+  function resetPage() {
+    var t = $("title"); t.hidden = false; t.removeAttribute("style"); t.classList.remove("dead"); body.classList.remove("dead");
+  }
+
+  /* parodo, kiek žodžio liko: raidės po vieną dingsta atsitiktinėse vietose, o po žodžiu lieka gyvybių juostelė; vieta puslapyje išlieka */
+  function paint(it) {
+    var el = it.el, share = it.hp / it.max;
+    if (it.hp <= 0) {
+      el.classList.remove("hov");
+      if (it.box) { el.classList.add("bare"); if (!el._live) el.classList.add("dead"); }      // rėmelis netenka fono ir kraštų; jo turinys, jei dar liko, lieka
+      else el.style.visibility = "hidden";
+      eachBox(el, function (box) { if (--box._live <= 0 && (!box._item || box._item.hp <= 0)) box.classList.add("dead"); });      // rėmelis su gyvybėmis pats savaime nedingsta
+      return;
+    }
+    if (it.box) return;
+    if (it.size) { el.style.clipPath = snakeClip(Math.round((1 - share) * it.size.w * it.size.h), it.size.w, it.size.h); return; }       // nuotrauka: suėsta pikselių dalis = prarastų gyvybių dalis
+    if (!it.word) { el.style.opacity = Math.max(.15, share); return; }                                  // linija ar sąrašo taškas
+    split(it);
+    var hide = {}, cnt = hiddenCount(it, share);
+    for (var h = 0; h < cnt; h++) hide[it.order[h]] = 1;
+    el.textContent = "";
+    for (var c = 0; c < it.chars.length; c++) {
+      if (hide[c]) { var x = document.createElement("i"); x.className = "x"; x.textContent = it.chars[c]; el.appendChild(x); }
+      else el.appendChild(document.createTextNode(it.chars[c]));
+    }
+    el.classList.add("dmg"); el.style.setProperty("--hp", (share * 100).toFixed(1) + "%");
+  }
+
+  /* atima iš taikinio iki k gyvybių; grąžina, kiek atimta */
+  function hit(i, k) {
+    var it = items[i];
+    if (!it || it.hp <= 0) return 0;
+    var d = Math.min(k, it.hp); it.hp -= d; if (d > 0) { dirty = true; paint(it); }
+    return d;
+  }
+
+  function gain(d) { if (d > 0) { S.money += d; S.total += d; left -= d; if (left <= 0) finished(); } }
+
+  /* kitas trintukų taikinys pagal nustatymuose pasirinktą tvarką: nuo viršaus, nuo apačios arba atsitiktinis.
+     Atsitiktinis laikomas daugiausia RANDOM_MS (nuotrauka, t. y. pikseliai, – RANDOM_IMG_MS): jei per tiek neištrinamas, traukiama iš naujo.
+     Traukiama iš visų likusių, todėl tas pats elementas gali iškristi ir vėl. */
+  var back = [], bpos = 0, pool = [], randomItem = null, randomSince = 0, RANDOM_MS = 1000, RANDOM_IMG_MS = 2000;
+  function pickRandom() {
+    while (pool.length) {
+      var j = Math.floor(Math.random() * pool.length), it = pool[j];
+      if (it.hp <= 0) { var tail = pool.pop(); if (j < pool.length) pool[j] = tail; continue; }       // ištrinti išmetami iš atrankos
+      return it;
+    }
+    return null;
+  }
+  function nextTarget() {
+    if (S.order === "random") {
+      var now = Date.now();
+      if (!randomItem || randomItem.hp <= 0 || now - randomSince >= (randomItem.size ? RANDOM_IMG_MS : RANDOM_MS)) { randomItem = pickRandom(); randomSince = now; }
+      return randomItem;
+    }
+    if (S.order === "bottom") { while (bpos < back.length && back[bpos].hp <= 0) bpos++; return back[bpos] || null; }
+    while (pos < items.length && items[pos].hp <= 0) pos++;
+    return items[pos] || null;
+  }
+  /* trinama pagal tvarką (trintukai ir paspaudimas tuščioje vietoje); grąžina, kiek ištrinta */
+  function eraseNext(k) {
+    var done = 0, it;
+    while (done < k && (it = nextTarget())) done += strike(it.i, k - done);
+    gain(done);
+    return done;
+  }
+
+  /* paspaudimas muša tik paspaustą taikinį: jei smūgis stipresnis už jo gyvybes, likutis niekur nepereina */
+  function eraseAt(i, k) {
+    var d = strike(i, k);
+    gain(d);
+    return d;
+  }
+
+  /* gyvybių juostos: ties žodžiu, ant kurio užvesta pelė, ir ties darbininkų taikiniu */
+  var hover = null, mouseX = 0, mouseY = 0;
+  /* byMouse: tai taikinys po pele. Nuotraukos ir rėmeliai gali būti didesni už ekraną, todėl jų juosta rodoma ties pele;
+     darbininkų juosta laikoma matomoje ekrano dalyje, kol matosi bent dalis taikinio. */
+  function placeBar(box, it, byMouse) {
+    var r = it && it.hp > 0 && root.contains(it.el) && (it.size || it.box ? it.el.getBoundingClientRect() : it.el.getClientRects()[0]);
+    var head = document.querySelector("header").getBoundingClientRect().bottom;
+    if (!r || (!byMouse && (r.bottom < head || r.top > window.innerHeight))) { box.hidden = true; return; }
+    var atMouse = byMouse && (it.box || it.size);
+    var wdt = Math.min(180, Math.max(it.size ? 110 : 54, r.width));
+    var mid = atMouse || (byMouse && r.width > wdt && mouseX >= r.left && mouseX <= r.right) ? mouseX : r.left + r.width / 2;     // ilgai linijai juosta rodoma ties pele
+    var top = atMouse ? mouseY + 18 : r.bottom + 3;
+    box.hidden = false;
+    box.style.left = Math.max(4, Math.min(window.innerWidth - wdt - 4, mid - wdt / 2)) + "px";
+    box.style.top = Math.max(head + 2, Math.min(window.innerHeight - 19, top)) + "px";
+    box.style.width = wdt + "px";
+    box.firstChild.style.width = (it.hp / it.max * 100) + "%";
+    box.lastChild.textContent = fmt(it.hp) + " / " + fmt(it.max);
+    box.classList.toggle("special", it.mult > 1);
+  }
+  function placeFrame(frame, it) {
+    if (!it || !it.size || it.hp <= 0 || !root.contains(it.el)) { frame.hidden = true; return; }
+    var r = it.el.getBoundingClientRect();
+    frame.hidden = false;
+    frame.style.left = r.left + "px"; frame.style.top = r.top + "px"; frame.style.width = r.width + "px"; frame.style.height = r.height + "px";
+  }
+  function workerItem() {
+    if (!current || current.done || !perSec()) return null;
+    return nextTarget();
+  }
+  function showBar() {
+    var w = workerItem();
+    placeBar($("hpbar"), hover, true);
+    placeBar($("wbar"), w === hover ? null : w, false);
+    placeFrame($("hframe"), hover);
+    root.classList.toggle("onimg", !!(hover && hover.size && hover.hp > 0));
+  }
+
+  function finished() {
+    if (!current || current.done) return;
+    current.done = true; left = 0;
+    S.destroyed++; markGone(current.title); delete started()[norm(current.title)];
+    var r = reward(full);
+    S.money += r.lang + r.total + r.count;
+    (S.ended || (S.ended = {}))[S.lang] = { t: current.title, full: full, reward: r };       // kad langas liktų ir perkrovus puslapį
+    save();
+    showEnded(S.ended[S.lang]);
+    render(); showStats();
+  }
+  /* premija už sunaikintą straipsnį (visi dydžiai įskaito ir šį straipsnį):
+     base × kalbos užbaigimas + base × bendras visų Vikipedijų užbaigimas + sunaikintų straipsnių skaičius.
+     base – straipsnio gyvybės; pats jis į premiją neįeina. */
+  /* visų Vikipedijų: kiek straipsnių sunaikinta ir kiek jų yra (dydis žinomas tik gavus visų kalbų lentelę, kitaip 0) */
+  function totals() {
+    var gone = 0, all = 0;
+    Object.keys(S.gone).forEach(function (l) { gone += Object.keys(S.gone[l]).length; });
+    if (S.countsTs) langList().forEach(function (l) { all += S.counts[l[0]] || 0; });
+    return { gone: gone, all: all, share: all ? Math.min(1, gone / all) : 0 };
+  }
+  function sharePct(share) { var p = share * 100; return (p >= 1 ? p.toFixed(2) : String(+p.toPrecision(2))).replace(".", ",") + " %"; }
+  var totalSig = "";
+  function showTotal() {          // perskaičiuojama tik pasikeitus sunaikintų skaičiui ar Vikipedijų dydžiams
+    var sig = [S.destroyed, S.countsTs, S.counts[S.lang], S.langs && S.langs.ts].join("|");
+    if (sig === totalSig) return;
+    totalSig = sig;
+    var t = totals();
+    $("totalDone").textContent = t.all ? "Bendras užbaigimas: " + sharePct(t.share) + " (" + t.gone.toLocaleString("lt-LT") + " iš " + (t.all / 1e6).toFixed(1).replace(".", ",") + " mln. straipsnių)" : "Bendras užbaigimas: –";
+  }
+  function reward(base) {
+    var n = S.counts[S.lang] || 0, t = totals();
+    var langShare = n ? Math.min(1, goneCount() / n) : 0;
+    return { base: base, lang: base * langShare, total: base * t.share, count: S.destroyed, langShare: langShare, totalShare: t.share };
+  }
+  function rewardText(r) {
+    var num = function (v) { return v < 100000 ? v.toLocaleString("lt-LT", { maximumFractionDigits: 2 }) : fmt(v); };
+    return "<br><strong>Premija +" + num(r.lang + r.total + r.count) + "</strong>" +
+      [["kalbos užbaigimas " + sharePct(r.langShare), r.lang], ["bendras užbaigimas " + sharePct(r.totalShare), r.total],
+       ["sunaikinti straipsniai", r.count]].map(function (x) { return "<br>" + x[0] + " +" + num(x[1]); }).join("");
+  }
+  /* sunaikinimo langas; naujas straipsnis prasideda tik paspaudus mygtuką (ar pasirinkus kitą straipsnį) */
+  function showEnded(x) {
+    resetPage(); $("title").textContent = ""; $("title").hidden = true;
+    body.innerHTML = '<div class="msg"><b>Straipsnis sunaikintas!</b>' + (x.full ? fmt(x.full) + ' raidžių' : '') +
+      (x.reward ? rewardText(x.reward) : '') +
+      '<br><br><button class="primary" id="next">Kitas straipsnis</button></div>';
+    $("next").onclick = randomArticle;
+  }
+
+  /* sunaikintas straipsnis atrodo taip, lyg jo niekada nebūtų buvę */
+  function showMissing(title) {
+    snapshot(); current = null; items = []; left = full = 0; hover = null; showBar();
+    resetPage(); $("title").textContent = norm(title);
+    body.innerHTML = '<div class="msg">Vikipedijoje nėra straipsnio tokiu pavadinimu.<br><br><button class="primary" id="retry">Atsitiktinis straipsnis</button></div>';
+    $("retry").onclick = randomArticle;
+    window.scrollTo(0, 0); render();
+  }
+
+  function load(title, random) {
+    if (loading) return;
+    if (isGone(title)) { clearTimeout(retryTimer); if (random) randomArticle(); else showMissing(title); return; }
+    save(); clearTimeout(retryTimer); loading = true; current = null; items = []; left = full = 0; hover = null;      // pirma įsimenama, kiek ištrinta ankstesniame straipsnyje
+    resetPage(); $("title").textContent = "…";
+    body.innerHTML = '<div class="msg">Kraunama…</div>';
+    var my = ++seq;
+    api({ action: "parse", redirects: 1, prop: "text", disableeditsection: 1, disabletoc: 1, page: title }).then(function (j) {
+      if (my !== seq) return;                       // tuo tarpu pakeista kalba: senas atsakymas nebereikalingas
+      if (j.error) { var no = new Error(j.error.info || j.error.code); no.missing = true; throw no; }
+      backoff = 0;
+      var t = j.parse.title;
+      if (isGone(t)) { loading = false; if (random) randomArticle(); else showMissing(title); return; }      // kitas pavadinimas, vedantis į jau sunaikintą straipsnį
+      var html = clean(j.parse.text);
+      $("article").dir = langDir(S.lang);
+      $("title").textContent = t;
+      body.innerHTML = "";
+      while (html.firstChild) body.appendChild(document.adoptNode(html.firstChild));
+      current = { title: t, done: false };
+      (S.last || (S.last = {}))[S.lang] = t;          // šis straipsnis atsidarys ir perkrovus puslapį
+      if (S.ended) delete S.ended[S.lang];
+      collect(); restore(t);
+      window.scrollTo(0, 0);
+      loading = false; save(); render();
+    }).catch(function (e) {
+      if (my !== seq) return;
+      loading = false;
+      if (e.missing) {
+        body.innerHTML = '<div class="msg">Tokio straipsnio nėra.<br><small></small><br><br><button class="primary" id="retry">Atsitiktinis straipsnis</button></div>';
+        body.querySelector("small").textContent = e.message; $("retry").onclick = randomArticle;
+      } else failed(function () { load(title, random); });
+    });
+  }
+
+  /* Vikipedija riboja, kiek užklausų galima siųsti iš eilės. Nepavykus laukiama (10, 20, 40, daugiausia 60 s) ir bandoma dar kartą pačiam. */
+  var retryTimer = 0, backoff = 0, queue = [], seq = 0;
+  function failed(again) {
+    save(); current = null;
+    backoff = Math.min(60, backoff ? backoff * 2 : 10);
+    var left_s = backoff;
+    body.innerHTML = '<div class="msg">Vikipedija laikinai neatsako (nėra interneto arba per daug užklausų iš eilės).<br>Bandysiu dar kartą po <span id="cd"></span> s.<br><br><button class="primary" id="retry">Bandyti dabar</button></div>';
+    function go() { clearTimeout(retryTimer); again(); }
+    $("retry").onclick = go;
+    (function tick() { var el = $("cd"); if (!el) return; el.textContent = left_s; if (left_s-- <= 0) return go(); retryTimer = setTimeout(tick, 1000); })();
+  }
+  /* atsitiktinių pavadinimų paimama iš karto 20, kad kiekvienam straipsniui reikėtų tik vienos užklausos */
+  function randomArticle() {
+    if (loading) return;
+    clearTimeout(retryTimer);
+    queue = queue.filter(function (t) { return !isGone(t); });
+    if (queue.length) return load(queue.shift(), true);
+    loading = true;
+    var my = ++seq;
+    api({ action: "query", list: "random", rnnamespace: 0, rnlimit: 20 }).then(function (j) {
+      if (my !== seq) return;
+      loading = false; queue = j.query.random.map(function (x) { return x.title; }).filter(function (t) { return !isGone(t); });
+      if (queue.length) load(queue.shift(), true); else retryTimer = setTimeout(randomArticle, 5000);          // visi 20 jau sunaikinti: imami kiti
+    }).catch(function () { if (my !== seq) return; loading = false; failed(randomArticle); });
+  }
+
+  var articleCount = 0;
+  function showStats() {
+    $("destroyed").textContent = fmt(S.destroyed);
+    $("wikiLeft").textContent = articleCount ? "Liko straipsnių: " + Math.max(0, articleCount - goneCount()).toLocaleString("lt-LT") + " · atlikta " + donePct(S.lang) : "";
+    buildLangs();
+  }
+  function loadCount() {
+    var l = S.lang;
+    articleCount = (S.counts || {})[l] || 0; showStats();
+    api({ action: "query", meta: "siteinfo", siprop: "statistics" }).then(function (j) {
+      S.counts[l] = j.query.statistics.articles;
+      if (l === S.lang) articleCount = S.counts[l];
+      showStats();
+    }).catch(function () {});
+  }
+
+  /* ---------- kalbos: visos veikiančios Vikipedijos (sąrašas imamas iš Wikimedia, atnaujinamas kas savaitę) ---------- */
+  if (!S.counts) S.counts = {};
+  var LANGS_FALLBACK = [["lt", "lietuvių", "lietuvių", "ltr"], ["en", "English", "anglų", "ltr"]];
+  function langList() { return S.langs && S.langs.list && S.langs.list.length ? S.langs.list : LANGS_FALLBACK; }
+  function langDir(code) { var x = langList().filter(function (l) { return l[0] === code; })[0]; return x && x[3] === "rtl" ? "rtl" : "ltr"; }
+  /* kiek procentų tos kalbos Vikipedijos jau sunaikinta */
+  function donePct(code) {
+    var g = Object.keys(S.gone[code] || {}).length, n = (S.counts || {})[code];
+    if (!g) return "0 %";
+    if (!n) return g + " sunaikinta";
+    var p = g / n * 100;
+    if (g >= n) return "100 %";
+    return (p >= 1 ? Math.min(99.99, p).toFixed(2) : String(+p.toPrecision(2))) + " %";      // kol bent vienas straipsnis liko, 100 % nerodoma
+  }
+  /* savas išskleidžiamas sąrašas (paprastame <select> juostų nupiešti negalima): straipsnių skaičius ir žalia sunaikintos dalies juosta */
+  var langSig = "";
+  function langName(l) { var local = l[2].charAt(0).toUpperCase() + l[2].slice(1); return local + (l[1].toLowerCase() !== l[2].toLowerCase() ? " – " + l[1] : ""); }
+  function played(code) { return Object.keys(S.gone[code] || {}).length; }
+  function buildLangs() {
+    var list = langList().slice();
+    if (!list.some(function (l) { return l[0] === S.lang; })) list.push([S.lang, S.lang, S.lang, "ltr"]);
+    var mine = list.filter(function (l) { return l[0] === S.lang; })[0];
+    var label = langName(mine).split(" – ")[0] + " · " + donePct(S.lang) + " ▾";
+    if ($("lang").textContent !== label) $("lang").textContent = label;
+    if ($("langPanel").hidden) return;
+    var find = $("langFind").value.trim().toLowerCase();
+    var when = function (t) { var d = new Date(t), p = function (x) { return (x < 10 ? "0" : "") + x; }; return p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes()); };
+    $("langNote").textContent = S.growthTo ? "Žalias skaičius – straipsnių pokytis per parą: " + when(S.growthFrom) + " → " + when(S.growthTo) : "Paros pokytis dar negautas.";
+    var sig = find + "|" + list.length + "|" + S.lang + "|" + S.countsTs + "|" + S.growthTo + "|" + (S.counts[S.lang] || 0) + "|" + list.map(function (l) { return played(l[0]) || ""; }).join(",");
+    if (sig === langSig) return;
+    langSig = sig;
+    if (find) list = list.filter(function (l) { return (l[0] + " " + l[1] + " " + l[2]).toLowerCase().indexOf(find) >= 0; });
+    var box = $("langList"), top = box.scrollTop; box.textContent = "";
+    var byName = function (a, b) { return a[2].localeCompare(b[2], "lt"); };
+    [["Jau žaistos", list.filter(function (l) { return played(l[0]); }).sort(function (a, b) { return played(b[0]) - played(a[0]) || byName(a, b); })],
+     [(find ? "Rasta" : "Visos kalbos") + " (" + list.filter(function (l) { return !played(l[0]); }).length + ")", list.filter(function (l) { return !played(l[0]); }).sort(byName)]].forEach(function (g) {
+      if (!g[1].length) return;
+      var head = document.createElement("div"); head.className = "lgroup"; head.textContent = g[0]; box.appendChild(head);
+      g[1].forEach(function (l) { box.appendChild(langRow(l)); });
+    });
+    if (!box.firstChild) box.textContent = "Tokios kalbos nėra.";
+    box.scrollTop = top;
+  }
+  function langRow(l) {
+    var row = document.createElement("button"), n = S.counts[l[0]], g = played(l[0]);
+    var el = function (tag, cls, text) { var x = document.createElement(tag); if (cls) x.className = cls; if (text) x.textContent = text; return x; };
+    row.type = "button"; row.className = "lrow" + (l[0] === S.lang ? " cur" : "") + (n && g >= n ? " full" : ""); row.dataset.code = l[0]; row.title = langName(l);
+    var name = el("span", "lname", langName(l)), info = el("span", "linfo"), bar = el("span", "lbar"), fill = el("i");
+    var count = el("span", "", n ? "Straipsnių: " + n.toLocaleString("lt-LT") : "Straipsnių skaičius nežinomas"), up = (S.growth || {})[l[0]];
+    if (up) count.appendChild(el("em", up < 0 ? "down" : "", (up > 0 ? "+" : "−") + Math.abs(up).toLocaleString("lt-LT")));       // pokytis per parą
+    info.appendChild(count);
+    info.appendChild(el("span", "", (g ? g.toLocaleString("lt-LT") + " sunaikinta · " : "") + (g && !n ? "" : donePct(l[0]))));
+    if (g && n) { fill.style.width = Math.min(100, g / n * 100) + "%"; fill.style.minWidth = "3px"; }      // net labai maža dalis lieka matoma
+    bar.appendChild(fill); row.appendChild(name); row.appendChild(info); row.appendChild(bar);
+    row.onclick = function () { chooseLang(l[0]); };
+    return row;
+  }
+  function openLangs(open) {
+    $("langPanel").hidden = !open; $("lang").setAttribute("aria-expanded", open);
+    if (!open) return;
+    $("langFind").value = ""; langSig = ""; buildLangs(); $("langList").scrollTop = 0; $("langFind").focus(); fetchCounts();
+  }
+  function chooseLang(v) {
+    openLangs(false);
+    if (v === S.lang) return;
+    save(); current = null; S.lang = v; save(); seq++; clearTimeout(retryTimer); loading = false; queue = []; backoff = 0; $("article").dir = langDir(v); loadCount(); randomArticle();
+  }
+  /* visų Vikipedijų straipsnių skaičiai vienoje viešoje lentelėje (Wikimedia Commons, atnaujinama kas kelias valandas).
+     Pokytis per parą: naujausia lentelės versija palyginama su maždaug paros senumo versija iš jos istorijos. */
+  function fetchTable(from) {
+    return fetch("https://commons.wikimedia.org/w/api.php?action=query&prop=revisions&rvprop=content%7Ctimestamp&rvslots=main&rvlimit=1&titles=Data%3AWikipedia_statistics%2Fdata.tab&format=json&formatversion=2&origin=*" + (from ? "&rvstart=" + from : ""))
+      .then(function (r) { return r.json(); }).then(function (j) {
+        var rev = j.query.pages[0].revisions[0], table = JSON.parse(rev.slots.main.content), names = table.schema.fields.map(function (f) { return f.name; });
+        var site = names.indexOf("site"), art = names.indexOf("articles"), counts = {};
+        table.data.forEach(function (row) { var m = /^([a-z0-9-]+)\.wikipedia$/.exec(row[site]); if (m && row[art] > 0) counts[m[1]] = +row[art]; });
+        return { time: Date.parse(rev.timestamp), counts: counts };
+      });
+  }
+  var countsBusy = false;
+  function fetchCounts() {
+    if (countsBusy || (S.countsTs && S.growth && Date.now() - S.countsTs < 3 * 3600000)) return;
+    countsBusy = true;
+    fetchTable("").then(function (now) {
+      Object.keys(now.counts).forEach(function (l) { if (!(l === S.lang && S.counts[l])) S.counts[l] = now.counts[l]; });
+      S.countsTs = Date.now(); save(); showStats();
+      return fetchTable(new Date(now.time - 23 * 3600000).toISOString().slice(0, 19) + "Z").then(function (before) {     // paskutinė versija, senesnė nei 23 val.
+        var growth = {};
+        Object.keys(now.counts).forEach(function (l) { if (before.counts[l] && now.counts[l] !== before.counts[l]) growth[l] = now.counts[l] - before.counts[l]; });
+        S.growth = growth; S.growthFrom = before.time; S.growthTo = now.time; save(); showStats();
+      });
+    }).catch(function () {}).then(function () { countsBusy = false; });
+  }
+  function fetchLangs() {
+    if (S.langs && Date.now() - S.langs.ts < 7 * 86400000) return;
+    fetch("https://meta.wikimedia.org/w/api.php?action=sitematrix&format=json&formatversion=2&origin=*&smtype=language&uselang=lt")
+      .then(function (r) { return r.json(); }).then(function (j) {
+        var m = j.sitematrix, list = [];
+        Object.keys(m).filter(function (k) { return /^\d+$/.test(k); }).forEach(function (k) {
+          var e = m[k], w = (e.site || []).filter(function (s) { return s.code === "wiki" && !s.closed; })[0];
+          var host = w && /^https:\/\/([a-z0-9-]+)\.wikipedia\.org$/.exec(w.url);
+          if (host) list.push([host[1], e.name || host[1], e.localname || e.name || host[1], e.dir || "ltr"]);
+        });
+        if (list.length) { S.langs = { ts: Date.now(), list: list }; $("article").dir = langDir(S.lang); save(); showStats(); }
+      }).catch(function () {});
+  }
+
+  /* kalbose be tarpų tarp žodžių (japonų, kinų, tajų…) tekstas padalijamas į žodžius pagal kalbos taisykles */
+  var NO_SPACES = /^(ja|zh|zh-yue|zh-classical|wuu|gan|cdo|th|lo|km|my|bo|dz)$/;
+  function words(part) {
+    if (!NO_SPACES.test(S.lang) || !window.Intl || !Intl.Segmenter) return [part];
+    var out = [], it = new Intl.Segmenter(S.lang, { granularity: "word" }).segment(part)[Symbol.iterator](), s;
+    while (!(s = it.next()).done) { if (!s.value.isWordLike && out.length) out[out.length - 1] += s.value.segment; else out.push(s.value.segment); }
+    return out;
+  }
+  /* rašto ženklai: raidė su prie jos prikibusiais ženklais lieka kartu */
+  function graphemes(word) {
+    if (!window.Intl || !Intl.Segmenter) return Array.from(word);
+    return Array.from(new Intl.Segmenter(S.lang, { granularity: "grapheme" }).segment(word), function (s) { return s.segment; });
+  }
+
+  /* ---------- sąsaja ---------- */
+  /* ---------- ištrintų dalykų apskaita ---------- */
+  var T = S.stats || (S.stats = {});
+  ["words", "images", "px", "lines", "linePx", "boxes", "boxPx"].forEach(function (k) { T[k] = T[k] || 0; });
+  T.chars = T.chars || {}; T.since = T.since || Date.now();
+  var statsChanged = true, statsDrawn = 0;
+  /* žodis išskaidomas į rašto ženklus ir nustatoma atsitiktinė jų dingimo tvarka */
+  function split(it) {
+    if (it.chars) return;
+    it.chars = graphemes(it.word); it.order = [];
+    for (var i = 0; i < it.chars.length; i++) it.order.splice(Math.floor(Math.random() * (it.order.length + 1)), 0, i);
+  }
+  function hiddenCount(it, share) { return it.chars.length - Math.ceil(it.chars.length * share); }
+  /* smūgis, kuris įskaitomas į apskaitą (atkuriant pradėtą straipsnį naudojamas tik hit, kad nebūtų skaičiuojama antrą kartą) */
+  function strike(i, k) {
+    var it = items[i], before = it ? it.hp : 0, d = hit(i, k);
+    if (d > 0) S.money += record(it, before);       // premija: papildomos raidės virš ištrintų
+    return d;
+  }
+  /* ---------- premijos už įgūdį: +1 % už kiekvieną BONUS_EVERY ištrintų (kiekvienam simboliui atskirai) ----------
+     Didina tik gaunamas raides: trynimo greitis, gyvybės ir „Iš viso ištrinta“ nesikeičia. */
+  var BONUS_EVERY = { char: 10000, px: 10000000, lines: 1000, boxes: 1000 };
+  function bonus(count, kind) { return Math.floor((count || 0) / BONUS_EVERY[kind]); }       // procentais
+  /* įrašo smūgį į apskaitą ir grąžina už jį priklausančią premiją (pagal iki šio smūgio surinktą kiekį) */
+  function record(it, before) {
+    var was = before / it.max, now = it.hp / it.max, dead = it.hp <= 0, d = before - it.hp, extra = 0;
+    /* ištrintas simbolis: įrašomas į bendrą simbolių sąrašą, už jį – to simbolio premija nuo jo dalies elemento gyvybėse */
+    var count = function (c, share) { extra += share * bonus(T.chars[c], "char") / 100; T.chars[c] = (T.chars[c] || 0) + 1; };
+    if (it.word) {
+      split(it);
+      it.order.slice(hiddenCount(it, was), hiddenCount(it, now)).forEach(function (i) { count(it.chars[i], it.max / it.chars.length); });
+      if (dead) T.words++;
+    } else if (it.size) {
+      var n = it.size.w * it.size.h;
+      extra = d * bonus(T.px, "px") / 100;
+      T.px += Math.round((1 - now) * n) - Math.round((1 - was) * n);
+      if (dead) T.images++;
+    } else if (it.box) {
+      extra = d * bonus(T.boxes, "boxes") / 100;
+      if (dead) { T.boxes++; T.boxPx += it.area; }
+    } else if (it.len !== undefined) {
+      extra = d * bonus(T.lines, "lines") / 100;
+      if (dead) { T.lines++; T.linePx += it.len; }
+    } else {                                                                        // sąrašo taškas ar numeris: simboliai skaičiuojami iš kairės
+      var n2 = it.mark.length;
+      it.mark.slice(n2 - Math.ceil(n2 * was), n2 - Math.ceil(n2 * now)).forEach(function (c) { count(c, it.max / n2); });
+    }
+    statsChanged = true;
+    return extra;
+  }
+  function drawStats() {
+    var open = !!S.statsOpen;
+    $("stats").hidden = !open;
+    var label = open ? "📊 Ištrintų sąrašas: slėpti ▲" : "📊 Ištrintų sąrašas: rodyti ▼";
+    if ($("statsToggle").textContent !== label) { $("statsToggle").textContent = label; $("statsToggle").setAttribute("aria-expanded", open); }
+    if (!open || !statsChanged || Date.now() - statsDrawn < 500) return;          // perpiešiama ne dažniau kaip kas pusę sekundės
+    statsChanged = false; statsDrawn = Date.now();
+    var n = function (v) { return Math.round(v).toLocaleString("lt-LT"); };
+    var keys = Object.keys(T.chars).sort(function (a, b) { return T.chars[b] - T.chars[a] || a.localeCompare(b, "lt"); });
+    var sum = keys.reduce(function (s, c) { return s + T.chars[c]; }, 0);
+    $("statRows").textContent = "";
+    var next = function (count, kind) { return "Iki kito +1 %: " + n(BONUS_EVERY[kind] - count % BONUS_EVERY[kind]); };
+    [["Simboliai", n(sum)], ["Žodžiai (iki galo)", n(T.words)], ["Nuotraukų pikseliai", n(T.px), "px"], ["Nuotraukos (iki galo)", n(T.images)],
+     ["Linijos", n(T.lines), "lines"], ["Linijų ilgis, px", n(T.linePx)], ["Rėmeliai", n(T.boxes), "boxes"], ["Rėmelių plotas, px", n(T.boxPx)]].forEach(function (row) {
+      var tr = $("statRows").insertRow(), name = tr.insertCell(); name.textContent = row[0]; tr.insertCell().textContent = row[1];
+      if (!row[2]) return;
+      var tag = document.createElement("em"); tag.textContent = "+" + bonus(T[row[2]], row[2]) + " %"; name.appendChild(tag);
+      tr.title = next(T[row[2]], row[2]);
+    });
+    $("charsHead").textContent = "Simboliai (skirtingų: " + n(keys.length) + (keys.length > 600 ? ", rodoma 600" : "") + ")";
+    var box = $("chars"), top = box.scrollTop; box.textContent = "";
+    keys.slice(0, 600).forEach(function (c) {
+      var d = document.createElement("div"), b = document.createElement("b"), v = document.createElement("span");
+      b.textContent = c; v.textContent = n(T.chars[c]); d.appendChild(b); d.appendChild(v); box.appendChild(d);
+      var p = bonus(T.chars[c], "char");
+      if (p) { var tag = document.createElement("em"); tag.textContent = "+" + p + " %"; d.appendChild(tag); d.className = "up1"; }
+      d.title = next(T.chars[c], "char");
+    });
+    box.scrollTop = top;
+    $("statsSince").textContent = "Skaičiuojama nuo " + new Date(T.since).toLocaleDateString("lt-LT") + ".";
+  }
+  $("statsToggle").onclick = function () { S.statsOpen = !S.statsOpen; statsChanged = true; statsDrawn = 0; save(); drawStats(); };
+
+  /* ---------- progreso failas: išlieka net išvalius naršyklės duomenis ----------
+     Chrome ir Edge gali patys kas 15 s įrašyti progresą į pasirinktą failą; kitose naršyklėse failą reikia atsisiųsti.
+     Failo, kuriame progresas didesnis nei žaidime (pvz. po naršyklės išvalymo), žaidimas niekada neperrašo. */
+  var AUTO = !!(window.showSaveFilePicker && window.showOpenFilePicker), FILE_NAME = "wiki-trintukas-progresas.json";
+  var FILE_TYPES = [{ description: "Wiki trintuko progresas", accept: { "application/json": [".json"] } }];
+  var fileHandle = null, fileState = "none", fileTime = 0, fileError = "", writing = false;
+
+  function saveText() { save(); return JSON.stringify({ game: "wikitrintukas", key: KEY, saved: Date.now(), data: S }); }
+  function parseSave(text) {
+    var f = null;
+    try { f = JSON.parse(text); } catch (e) {}
+    if (!f || f.game !== "wikitrintukas" || f.key !== KEY || !f.data || typeof f.data.total !== "number" || !/^[a-z0-9-]+$/.test(f.data.lang)) {
+      var bad = new Error("Tai ne Wiki trintuko progreso failas."); bad.foreign = true; throw bad;
+    }
+    return f;
+  }
+  /* pasirinktas failas įsimenamas naršyklės duomenų bazėje, kad po perkrovimo jo nereikėtų rinktis iš naujo */
+  function fileStore(mode, action) {
+    return new Promise(function (ok, fail) {
+      var open = indexedDB.open("wikitrintukas", 1);
+      open.onupgradeneeded = function () { open.result.createObjectStore("files"); };
+      open.onerror = function () { fail(open.error); };
+      open.onsuccess = function () {
+        try {
+          var tx = open.result.transaction("files", mode), req = action(tx.objectStore("files"));
+          tx.oncomplete = function () { open.result.close(); ok(req.result); };
+          tx.onerror = tx.onabort = function () { open.result.close(); fail(tx.error); };
+        } catch (e) { open.result.close(); fail(e); }
+      };
+    });
+  }
+  function rememberFile(h) { return fileStore("readwrite", function (s) { return s.put(h, "save"); }).catch(function () {}); }
+  function writeFile() {
+    if (!fileHandle || fileState !== "on" || writing || frozen) return Promise.resolve();
+    writing = true;
+    return fileHandle.getFile().then(function (f) { return f.text(); }).then(function (old) {
+      if (old.trim() && parseSave(old).data.total > S.total) { fileState = "older"; return; }
+      var text = saveText();
+      return fileHandle.createWritable().then(function (w) { return w.write(text).then(function () { return w.close(); }); })
+        .then(function () { fileTime = Date.now(); fileError = ""; });
+    }).catch(function (e) {
+      if (e.foreign) fileState = "foreign"; else fileError = e.message;          // laikina klaida (pvz. failas užimtas): bandoma vėl po 15 s
+    }).then(function () { writing = false; showFile(); });
+  }
+  function createSaveFile() {
+    window.showSaveFilePicker({ suggestedName: FILE_NAME, types: FILE_TYPES }).then(function (h) {
+      fileHandle = h; fileState = "on"; fileTime = 0; fileError = ""; rememberFile(h); showFile(); return writeFile();
+    }).catch(function (e) { if (e.name !== "AbortError") alert("Nepavyko: " + e.message); });
+  }
+  function resumeSaving() {
+    fileHandle.requestPermission({ mode: "readwrite" }).then(function (p) { if (p === "granted") { fileState = "on"; showFile(); return writeFile(); } })
+      .catch(function (e) { alert("Nepavyko: " + e.message); });
+  }
+  /* paklausia ir pakeičia progresą įrašytu (puslapis persikrauna); grąžina false, jei nepakeista */
+  function applySave(text, handle, accepted, where) {
+    var f = parseSave(text), d = f.data;
+    if (!confirm((where || "Faile") + " (įrašyta " + new Date(f.saved).toLocaleString("lt-LT") + "):\n  ištrinta: " + fmt(d.total) + "\n  sunaikinta straipsnių: " + fmt(d.destroyed || 0) +
+      "\n\nDabar žaidime:\n  ištrinta: " + fmt(S.total) + "\n  sunaikinta straipsnių: " + fmt(S.destroyed) + "\n\nPakeisti dabartinį progresą įrašytu?")) return false;
+    frozen = true;
+    try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) { frozen = false; alert("Nepavyko įkelti: " + e.message); return false; }
+    if (accepted) accepted();
+    (handle ? rememberFile(handle) : Promise.resolve()).then(function () { location.reload(); });
+    return true;
+  }
+  function loadSaveFile() {
+    var failed = function (e) { if (e.name !== "AbortError") alert(e.message); };
+    if (AUTO) {
+      window.showOpenFilePicker({ types: FILE_TYPES }).then(function (hs) { return hs[0].getFile().then(function (f) { return f.text(); }).then(function (t) { applySave(t, hs[0]); }); }).catch(failed);
+      return;
+    }
+    var pick = document.createElement("input"); pick.type = "file"; pick.accept = ".json,application/json";
+    pick.onchange = function () { if (pick.files[0]) pick.files[0].text().then(function (t) { applySave(t, null); }).catch(failed); };
+    pick.click();
+  }
+  function downloadSave() {
+    var a = document.createElement("a"), url = URL.createObjectURL(new Blob([saveText()], { type: "application/json" }));
+    a.href = url; a.download = FILE_NAME; a.click(); setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    fileTime = Date.now(); showFile();
+  }
+  var fileSig = "";
+  function showFile() {
+    var name = fileHandle ? "„" + fileHandle.name + "“" : "", text, cls = "warn", buttons = [];
+    var load = ["📂 Įkelti progresą iš failo", loadSaveFile], create = [fileHandle ? "💾 Naujas išsaugojimo failas" : "💾 Sukurti išsaugojimo failą", createSaveFile];
+    if (!AUTO) { text = "Ši naršyklė pati į failą saugoti negali. Atsisiųskite jį kartkartėmis." + (fileTime ? " Atsisiųsta " + new Date(fileTime).toLocaleTimeString("lt-LT") + "." : ""); buttons = [["💾 Atsisiųsti progreso failą", downloadSave], load]; }
+    else if (fileState === "on") {
+      cls = fileError ? "warn" : "ok";
+      text = fileError ? "⚠ Nepavyko įrašyti į " + name + " (" + fileError + "). Bandoma dar kartą." : "✔ Automatiškai saugoma į " + name + (fileTime ? " · " + new Date(fileTime).toLocaleTimeString("lt-LT") : "");
+      buttons = [create, load];
+    }
+    else if (fileState === "paused") { text = "⚠ Po perkrovimo saugojimas į " + name + " sustabdytas, kol neleisite."; buttons = [["▶ Tęsti saugojimą į failą", resumeSaving], create, load]; }
+    else if (fileState === "older") { text = "⚠ Faile " + name + " progresas didesnis nei žaidime, todėl jis neperrašomas. Įkelkite jį arba sukurkite naują failą."; buttons = [load, create]; }
+    else if (fileState === "foreign") { text = "⚠ " + name + " nėra progreso failas, jis neperrašomas."; buttons = [create, load]; }
+    else { text = "Dabar progresas saugomas tik naršyklėje: išvalius jos duomenis dings."; buttons = [create, load]; }
+    gearDot();
+    var sig = cls + text + buttons.map(function (b) { return b[0]; }).join();
+    if (sig === fileSig) return;
+    fileSig = sig; $("fileStatus").textContent = text; $("fileStatus").className = "sub " + cls; $("fileButtons").textContent = "";
+    buttons.forEach(function (b) { var btn = document.createElement("button"); btn.type = "button"; btn.textContent = b[0]; btn.onclick = b[1]; $("fileButtons").appendChild(btn); });
+  }
+  function startFile() {
+    showFile();
+    if (!AUTO) return;
+    fileStore("readonly", function (s) { return s.get("save"); }).then(function (h) {
+      if (!h || fileHandle) return;
+      fileHandle = h;
+      return h.queryPermission({ mode: "readwrite" }).then(function (p) { fileState = p === "granted" ? "on" : "paused"; showFile(); return writeFile(); });
+    }).catch(function () {});
+  }
+  setInterval(writeFile, 15000);
+
+  /* ---------- sinchronizavimas per GitHub: progresas laikomas jūsų saugykloje, todėl žaisti galima skirtinguose kompiuteriuose ----------
+     Žetonas saugomas tik šioje naršyklėje (ne progreso faile). Kad vienas kompiuteris neužrašytų kito progreso, įsimenama
+     paskutinė matyta failo versija (sha): jei GitHub'e ji kita, savaime neperrašoma. */
+  var GH_KEY = "wikitrintukas_github", GH_EVERY = 5 * 60000;
+  var gh = null, ghState = "checking", ghTime = 0, ghError = "", ghBusy = false, ghSent = "";
+  try { gh = JSON.parse(localStorage.getItem(GH_KEY)); } catch (e) {}
+  function ghStore() { try { if (gh) localStorage.setItem(GH_KEY, JSON.stringify(gh)); else localStorage.removeItem(GH_KEY); } catch (e) {} }
+  function ghProgress() { return [S.total, S.money, S.destroyed].join(":"); }
+  function ghFetch(path, o) {
+    o = o || {};
+    return fetch("https://api.github.com/repos/" + gh.repo + path, { method: o.method || "GET", cache: "no-store", body: o.body,
+      headers: { Authorization: "Bearer " + gh.token, Accept: o.accept || "application/vnd.github+json" } });
+  }
+  function ghFail(r) {
+    var why = { 401: "netinkamas arba pasibaigęs žetonas", 403: "žetonas neturi teisės (reikia Contents: Read and write)", 404: "saugykla nerasta arba žetonas jos nemato" };
+    var e = new Error(why[r.status] || "GitHub klaida " + r.status); e.status = r.status; return e;
+  }
+  function ghFile(accept) { return ghFetch("/contents/" + FILE_NAME, { accept: accept }); }
+  function ghRemote() {         // null – failo dar nėra
+    return ghFile("application/vnd.github.object+json").then(function (r) { if (r.status === 404) return null; if (!r.ok) throw ghFail(r); return r.json(); });
+  }
+  function toBase64(text) {
+    return new Promise(function (ok) { var fr = new FileReader(); fr.onload = function () { ok(fr.result.split(",")[1] || ""); }; fr.readAsDataURL(new Blob([text])); });
+  }
+  function ghSave(force) {
+    if (!gh || ghBusy || frozen) return Promise.resolve();
+    ghBusy = true; showGh();
+    return ghRemote().then(function (remote) {
+      if (remote && remote.sha !== gh.sha && !force) { ghState = "conflict"; return; }
+      var text = saveText(), sent = ghProgress();
+      return toBase64(text).then(function (content) {
+        return ghFetch("/contents/" + FILE_NAME, { method: "PUT", body: JSON.stringify({ message: "Progresas " + new Date().toISOString(), content: content, sha: remote ? remote.sha : undefined }) });
+      }).then(function (r) {
+        if (r.status === 409 || r.status === 422) { ghState = "conflict"; return; }
+        if (!r.ok) throw ghFail(r);
+        return r.json().then(function (j) { gh.sha = j.content.sha; ghStore(); ghState = "on"; ghTime = Date.now(); ghSent = sent; ghError = ""; });
+      });
+    }).catch(function (e) { ghState = "error"; ghError = e.message; }).then(function () { ghBusy = false; showGh(); });
+  }
+  function ghLoad() {
+    return ghRemote().then(function (remote) {
+      if (!remote) { alert("GitHub saugykloje progreso dar nėra."); return; }
+      return ghFile("application/vnd.github.raw+json").then(function (r) { if (!r.ok) throw ghFail(r); return r.text(); }).then(function (text) {
+        if (!applySave(text, null, function () { gh.sha = remote.sha; ghStore(); }, "GitHub'e")) { ghState = "conflict"; showGh(); }
+      });
+    }).catch(function (e) { ghState = "error"; ghError = e.message; showGh(); });
+  }
+  /* atvėrus žaidimą: jei GitHub'e yra šiame kompiuteryje dar nematytas progresas, pasiūloma jį įkelti */
+  function ghCheck() {
+    if (!gh) return showGh();
+    ghState = "checking"; showGh();
+    ghRemote().then(function (remote) {
+      if (remote && remote.sha !== gh.sha) return ghLoad();
+      ghState = "on"; showGh(); if (!remote) return ghSave();
+    }).catch(function (e) { ghState = "error"; ghError = e.message; showGh(); });
+  }
+  function ghConnect() {
+    var repo = $("ghRepo").value.trim().replace(/^https?:\/\/github\.com\//i, "").replace(/(\.git)?\/*$/, ""), token = $("ghToken").value.trim();
+    if (!/^[\w.-]+\/[\w.-]+$/.test(repo) || !token) { alert("Įrašykite saugyklą (vardas/pavadinimas) ir žetoną."); return; }
+    gh = { repo: repo, token: token, sha: null }; ghBusy = true; ghState = "checking";
+    ghFetch("").then(function (r) { if (!r.ok) throw ghFail(r); return r.json(); }).then(function (info) {
+      if (!info.private && !confirm("Saugykla „" + repo + "“ yra VIEŠA: jūsų progresą matys visi. Vis tiek naudoti?")) { gh = null; return; }
+      ghStore(); $("ghToken").value = "";
+      return ghRemote().then(function (remote) { ghBusy = false; return remote ? ghLoad() : ghSave(); });
+    }).catch(function (e) { gh = null; ghStore(); alert("Nepavyko prisijungti: " + e.message); }).then(function () { ghBusy = false; showGh(); });
+    showGh();
+  }
+  var ghSig = "";
+  function showGh() {
+    var text, cls = "warn", buttons = [], when = ghTime ? " · įrašyta " + new Date(ghTime).toLocaleTimeString("lt-LT") : "";
+    var save = ["⬆ Įrašyti į GitHub dabar", function () { ghSave(); }], load = ["⬇ Įkelti iš GitHub", ghLoad], off = ["Atsijungti", function () { gh = null; ghState = "checking"; ghStore(); showGh(); }];
+    if (!gh) { text = "Neprijungta. Saugyklą ir žetoną įrašykite žemiau."; cls = ""; buttons = [["🔗 Prisijungti", ghConnect]]; }
+    else if (ghBusy || ghState === "checking") { text = "Jungiamasi prie " + gh.repo + "…"; cls = ""; }
+    else if (ghState === "on") { cls = "ok"; text = "✔ Sinchronizuojama su " + gh.repo + when + ". Prieš pereidami į kitą kompiuterį spauskite „Įrašyti“."; buttons = [save, load, off]; }
+    else if (ghState === "conflict") {
+      text = "⚠ GitHub'e yra kito kompiuterio progresas, todėl savaime neįrašoma.";
+      buttons = [load, ["⬆ Perrašyti GitHub šiuo progresu", function () { if (confirm("GitHub'e esantis progresas bus pakeistas šio kompiuterio progresu. Tęsti?")) ghSave(true); }], off];
+    }
+    else { text = "⚠ " + ghError; buttons = [save, load, off]; }
+    $("ghForm").hidden = !!gh;
+    gearDot();
+    var sig = cls + text + buttons.map(function (b) { return b[0]; }).join();
+    if (sig === ghSig) return;
+    ghSig = sig; $("ghStatus").textContent = text; $("ghStatus").className = "sub " + cls; $("ghButtons").textContent = "";
+    buttons.forEach(function (b) { var btn = document.createElement("button"); btn.type = "button"; btn.textContent = b[0]; btn.onclick = b[1]; $("ghButtons").appendChild(btn); });
+  }
+  function gearDot() {
+    $("gear").classList.toggle("warn", (AUTO && (!!fileError || /^(paused|older|foreign)$/.test(fileState))) || (!!gh && /^(conflict|error)$/.test(ghState)));
+  }
+  function ghAuto() { if (gh && (ghState === "on" || ghState === "error") && ghProgress() !== ghSent) ghSave(); }
+  setInterval(ghAuto, GH_EVERY);
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") ghAuto(); });
+  document.addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") writeFile(); });
+
+  function buildShop() {
+    $("shop").innerHTML = SHOP.map(function (u) {
+      return '<div class="up" data-id="' + u.id + '"><span class="ic">' + u.icon + '</span><div><b></b><small>' + u.desc + '</small></div><button></button></div>';
+    }).join("");
+    [].forEach.call($("shop").children, function (row) {
+      row.querySelector("button").onclick = function () {
+        var u = SHOP.filter(function (x) { return x.id === row.dataset.id; })[0], c = cost(u);
+        if (S.money < c || (u.max && lv(u.id) >= u.max)) return;
+        S.money -= c; S.up[u.id] = lv(u.id) + 1; save(); render();
+      };
+    });
+  }
+  function render() {
+    showStarted(); drawStats(); showTotal();
+    /* viršuje visada matyti, kuris straipsnis trinamas (jo pavadinimas pačiame puslapyje ištrinamas pirmas) */
+    var name = current ? current.title : "–", label = current && current.done ? "Sunaikinta" : "Dabar trinama";
+    if ($("nowTitle").textContent !== name) { $("nowTitle").textContent = name; $("now").title = name; }
+    if ($("nowLabel").textContent !== label) $("nowLabel").textContent = label;
+    $("orig").disabled = !current;
+    $("money").textContent = fmt(S.money);
+    $("total").textContent = fmt(S.total);
+    var r = perSec();
+    $("rate").textContent = (r < 10 ? Math.round(r * 10) / 10 : fmt(r)) + " raidžių/s · " + fmt(perClick()) + " už paspaudimą";
+    var pct = full ? (1 - Math.max(0, left) / full) * 100 : 0;
+    $("prog").style.width = pct + "%";
+    $("progTxt").textContent = full ? "Šis straipsnis: " + pct.toFixed(1) + " % · liko " + fmt(Math.max(0, left)) : "–";
+    [].forEach.call($("shop").children, function (row) {
+      var u = SHOP.filter(function (x) { return x.id === row.dataset.id; })[0], l = lv(u.id), maxed = u.max && l >= u.max, b = row.querySelector("button");
+      row.querySelector("b").textContent = u.name + (u.max ? "" : " (" + l + ")");
+      var t = maxed ? "Turi" : fmt(cost(u));
+      if (b.textContent !== t) b.textContent = t;
+      b.disabled = !!maxed || S.money < cost(u);
+    });
+  }
+
+  function itemAt(target) {            // žodis arba nuotrauka po pele
+    var el = target && target.closest ? target.closest(".w, .wimg, .wbul, .wline, .wbox") : null;
+    while (el && el._item && el._item.box && el._item.hp <= 0) el = el.parentElement.closest(".wbox");      // jau ištrintas rėmelis praleidžiamas: taikomasi į išorinį
+    return el && el._item && root.contains(el) ? el._item : null;
+  }
+  /* apkarpyta nuotrauka paspaudimų nebegauna ten, kur pikselių neliko, todėl taikiniu laikomas visas pradinis jos plotas */
+  function imageAt(x, y) {
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (!it.size || it.hp <= 0) continue;
+      var r = it.el.getBoundingClientRect();
+      if (r.width && x >= r.left - 4 && x <= r.right + 4 && y >= r.top - 4 && y <= r.bottom + 4) return it;
+    }
+    return null;
+  }
+  function itemUnder(ev) {
+    var it = itemAt(ev.target);
+    return !it || it.box ? imageAt(ev.clientX, ev.clientY) || it : it;
+  }
+  /* paspaudimas ant taikinio muša jį; tuščioje vietoje (bet kur, išskyrus viršų ir dešinį skydelį) – trinama iš eilės, kaip darbininkų */
+  document.addEventListener("click", function (ev) {
+    if (!ev.target.closest || ev.target.closest("header, aside, button") || !current || current.done) return;
+    ev.preventDefault();
+    var it = itemUnder(ev), k = perClick();
+    mouseX = ev.clientX; mouseY = ev.clientY;
+    if (it && it.hp > 0) { hover = it; pop(ev.clientX, ev.clientY, eraseAt(items.indexOf(it), k)); }
+    else pop(ev.clientX, ev.clientY, eraseNext(k));
+    showBar(); render();
+  });
+  document.addEventListener("mousedown", function (ev) { if (ev.detail > 1 && !ev.target.closest("header, aside")) ev.preventDefault(); });     // greiti paspaudimai nepažymi teksto
+  $("article").addEventListener("mousemove", function (ev) {
+    mouseX = ev.clientX; mouseY = ev.clientY;
+    var it = itemUnder(ev);
+    if (it !== hover) { if (hover) hover.el.classList.remove("hov"); if (it && it.box) it.el.classList.add("hov"); }
+    if (it !== hover || (it && !it.word)) { hover = it; showBar(); }
+  });
+  $("article").addEventListener("mouseleave", function () { if (hover) hover.el.classList.remove("hov"); hover = null; showBar(); });
+  window.addEventListener("scroll", showBar, { passive: true });
+  function pop(x, y, k) {
+    var p = document.createElement("div"); p.textContent = "+" + fmt(k);
+    p.style.cssText = "position:fixed;left:" + x + "px;top:" + (y - 10) + "px;color:var(--red);font-weight:700;pointer-events:none;z-index:9;transition:all .6s ease-out";
+    document.body.appendChild(p);
+    requestAnimationFrame(function () { p.style.top = (y - 50) + "px"; p.style.opacity = 0; });
+    setTimeout(function () { p.remove(); }, 650);
+  }
+
+  var last = Date.now(), acc = 0, lastScroll = 0;
+  setInterval(function () {
+    var now = Date.now(), dt = Math.min(5, (now - last) / 1000); last = now;
+    if (current && !current.done) {
+      acc += perSec() * dt;
+      var k = Math.floor(acc); acc -= k;
+      if (k > 0) eraseNext(k);
+      var w = S.scroll && now - lastScroll > 700 && workerItem();          // „Sekti trintuką“: puslapis slenka paskui darbininkus
+      if (w) {
+        var y = w.el.getBoundingClientRect().top;
+        if (y < 90 || y > window.innerHeight - 140) { lastScroll = now; window.scrollBy({ top: y - window.innerHeight * 0.4, behavior: "smooth" }); }
+      }
+    } else acc = 0;
+    showBar(); render();
+  }, 100);
+  setInterval(save, 3000);
+  window.addEventListener("pagehide", save);
+
+  $("rnd").onclick = randomArticle;
+  $("orig").onclick = function () {
+    if (current) window.open("https://" + S.lang + ".wikipedia.org/wiki/" + encodeURIComponent(current.title.replace(/ /g, "_")), "_blank", "noopener");
+  };
+  delete S.follow;
+  $("follow").checked = !!S.scroll;
+  $("follow").onchange = function () { S.scroll = this.checked; save(); };
+  buildLangs(); $("article").dir = langDir(S.lang);
+  $("lang").onclick = function () { openLangs($("langPanel").hidden); };
+  $("langFind").oninput = function () { buildLangs(); $("langList").scrollTop = 0; };
+  $("langFind").onkeydown = function (e) { if (e.key === "Enter") { var first = $("langList").querySelector(".lrow"); if (first) chooseLang(first.dataset.code); } };
+  function openSettings(open) { $("setPanel").hidden = !open; $("gear").setAttribute("aria-expanded", open); }
+  $("gear").onclick = function () { openSettings($("setPanel").hidden); };
+  if (!/^(top|bottom|random)$/.test(S.order)) S.order = "top";
+  [].forEach.call(document.querySelectorAll("#orderSet input"), function (r) {
+    r.checked = r.value === S.order;
+    r.onchange = function () { S.order = r.value; randomItem = null; save(); showBar(); };
+  });
+  var PANELS = [["langPanel", "#langBox", openLangs, "lang"], ["setPanel", "#setBox", openSettings, "gear"]];
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") PANELS.forEach(function (p) { if (!$(p[0]).hidden) { p[2](false); $(p[3]).focus(); } });
+  });
+  /* paspaudus šalia atvertas langelis tik užsidaro (tas paspaudimas straipsnio netrina) */
+  document.addEventListener("click", function (e) {
+    PANELS.forEach(function (p) {
+      if ($(p[0]).hidden || !e.target.isConnected || e.target.closest(p[1])) return;
+      p[2](false);
+      if (!e.target.closest("header, aside")) e.stopPropagation();
+    });
+  }, true);
+  var st;
+  $("q").addEventListener("input", function () {
+    var v = this.value.trim(); clearTimeout(st);
+    if (v.length < 2) return;
+    st = setTimeout(function () {
+      api({ action: "opensearch", search: v, limit: 15, namespace: 0 }).then(function (j) {
+        $("hits").innerHTML = ""; (j[1] || []).filter(function (t) { return !isGone(t); }).slice(0, 8).forEach(function (t) { var o = document.createElement("option"); o.value = t; $("hits").appendChild(o); });
+      }).catch(function () {});
+    }, 300);
+  });
+  $("searchForm").onsubmit = function (e) { e.preventDefault(); var v = $("q").value.trim(); if (v) { load(v); $("q").value = ""; $("q").blur(); } };
+
+  buildShop(); render(); loadCount(); fetchLangs(); fetchCounts(); startFile(); ghCheck();
+  $("ghToken").onkeydown = $("ghRepo").onkeydown = function (e) { if (e.key === "Enter") ghConnect(); };
+  /* atidaromas paskutinis trintas straipsnis; jei jis sunaikintas – lieka sunaikinimo langas; jei jo nėra – atsitiktinis */
+  var want = decodeURIComponent((location.hash || "").slice(1)), last = (S.last || {})[S.lang];
+  var ended = (S.ended || {})[S.lang] || (last && isGone(last) ? { t: last } : null);
+  if (ended && (!want || norm(want) === norm(ended.t))) { current = { title: ended.t, done: true }; showEnded(ended); render(); }
+  else if (want) load(want); else if (last && !isGone(last)) load(last); else randomArticle();
+})();
+</script>
+</body>
+</html>
