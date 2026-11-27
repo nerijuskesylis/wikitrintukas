@@ -998,8 +998,10 @@
   }
   /* ---------- premijos už įgūdį: +1 % greičio už kiekvieną BONUS_EVERY ištrintų (kiekvienam simboliui atskirai) ----------
      Greičiau trinami tik tos rūšies taikiniai (ir trintuko, ir paspaudimu). Gyvybės ir už jas gaunamos raidės nesikeičia. */
-  var BONUS_EVERY = { char: 10000, px: 10000000, linePx: 1000000, boxPx: 10000000 };     // linijoms skaičiuojamas ilgis, rėmeliams – plotas (pikseliais)
+  /* char – to paties simbolio kiekis, chars – visų simbolių kartu (ši premija galioja visiems simboliams); linijoms skaičiuojamas ilgis, rėmeliams – plotas (pikseliais) */
+  var BONUS_EVERY = { char: 10000, chars: 1000000, px: 10000000, linePx: 1000000, boxPx: 10000000 };
   function bonus(count, kind) { return Math.floor((count || 0) / BONUS_EVERY[kind]); }       // procentais
+  var charSum = Object.keys(T.chars).reduce(function (s, c) { return s + T.chars[c]; }, 0);      // visų ištrintų simbolių kiekis
   /* kiek kartų greičiau trinamas šis taikinys */
   function speedOf(it) {
     if (it.size) return 1 + bonus(T.px, "px") / 100;
@@ -1007,14 +1009,14 @@
     if (it.len !== undefined) return 1 + bonus(T.linePx, "linePx") / 100;
     if (it.word) split(it);
     var chars = it.word ? it.chars : it.mark;       // žodis ar sąrašo numeris: kiekvienam simboliui sugaištama pagal jo paties premiją
-    var all = 0, time = 0;
-    chars.forEach(function (c) { var hp = codes(c); all += hp; time += hp / (1 + bonus(T.chars[c], "char") / 100); });
+    var all = 0, time = 0, common = bonus(charSum, "chars");
+    chars.forEach(function (c) { var hp = codes(c); all += hp; time += hp / (1 + (common + bonus(T.chars[c], "char")) / 100); });
     return time ? all / time : 1;
   }
   /* įrašo smūgį į apskaitą */
   function record(it, before) {
     var was = before / it.max, now = it.hp / it.max, dead = it.hp <= 0;
-    var count = function (c) { T.chars[c] = (T.chars[c] || 0) + 1; };      // ištrintas simbolis įrašomas į bendrą simbolių sąrašą
+    var count = function (c) { T.chars[c] = (T.chars[c] || 0) + 1; charSum++; };      // ištrintas simbolis įrašomas į bendrą simbolių sąrašą
     if (it.word) {
       split(it);
       it.order.slice(hiddenCount(it, was), hiddenCount(it, now)).forEach(function (i) { count(it.chars[i]); });
@@ -1042,15 +1044,14 @@
     statsChanged = false; statsDrawn = Date.now();
     var n = function (v) { return Math.round(v).toLocaleString("lt-LT"); };
     var keys = Object.keys(T.chars).sort(function (a, b) { return T.chars[b] - T.chars[a] || a.localeCompare(b, "lt"); });
-    var sum = keys.reduce(function (s, c) { return s + T.chars[c]; }, 0);
     $("statRows").textContent = "";
     var next = function (count, kind) { return "Iki kito +1 % greičio: " + n(BONUS_EVERY[kind] - count % BONUS_EVERY[kind]); };
-    [["Simboliai", n(sum)], ["Žodžiai (iki galo)", n(T.words)], ["Nuotraukų pikseliai", n(T.px), "px"], ["Nuotraukos (iki galo)", n(T.images)],
-     ["Linijos", n(T.lines)], ["Linijų ilgis, px", n(T.linePx), "linePx"], ["Rėmeliai", n(T.boxes)], ["Rėmelių plotas, px", n(T.boxPx), "boxPx"]].forEach(function (row) {
-      var tr = $("statRows").insertRow(), name = tr.insertCell(); name.textContent = row[0]; tr.insertCell().textContent = row[1];
+    [["Simboliai", charSum, "chars"], ["Žodžiai (iki galo)", T.words], ["Nuotraukų pikseliai", T.px, "px"], ["Nuotraukos (iki galo)", T.images],
+     ["Linijos", T.lines], ["Linijų ilgis, px", T.linePx, "linePx"], ["Rėmeliai", T.boxes], ["Rėmelių plotas, px", T.boxPx, "boxPx"]].forEach(function (row) {
+      var tr = $("statRows").insertRow(), name = tr.insertCell(); name.textContent = row[0]; tr.insertCell().textContent = n(row[1]);
       if (!row[2]) return;
-      var tag = document.createElement("em"); tag.textContent = "+" + bonus(T[row[2]], row[2]) + " %"; name.appendChild(tag);
-      tr.title = next(T[row[2]], row[2]);
+      var tag = document.createElement("em"); tag.textContent = "+" + bonus(row[1], row[2]) + " %"; name.appendChild(tag);
+      tr.title = next(row[1], row[2]);
     });
     $("charsHead").textContent = "Simboliai (skirtingų: " + n(keys.length) + (keys.length > 600 ? ", rodoma 600" : "") + ")";
     var box = $("chars"), top = box.scrollTop; box.textContent = "";
