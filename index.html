@@ -158,7 +158,8 @@
   .box[hidden] { display:none; }
   #started { max-height:220px; overflow:auto; display:grid; gap:4px; }
   #started button { display:flex; justify-content:space-between; gap:8px; width:100%; text-align:left; font-weight:400; font-size:13px; color:var(--link); background:#fff; }
-  #started button span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #started button span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #started button em { font-style:normal; font-size:11px; color:var(--mute); white-space:nowrap; align-self:center; }
   #started button b { color:var(--mute); font-variant-numeric:tabular-nums; white-space:nowrap; }
   label.chk { display:flex; gap:6px; align-items:center; font-size:13px; margin-top:8px; }
   .totline { margin-top:8px; padding-top:8px; border-top:1px solid #eaecf0; }
@@ -344,16 +345,21 @@
     return 3;
   }
   var startedSig = "";
-  function showStarted() {
-    var all = started(), now = current && !current.done ? norm(current.title) : "";
-    var keys = Object.keys(all).filter(function (k) { return k !== now; }).sort(function (a, b) { return all[b].ts - all[a].ts; });
-    var sig = S.lang + "|" + keys.map(function (k) { return k + ":" + all[k].pct.toFixed(1); }).join("|");
+  function showStarted() {                  // visų kalbų nebaigti straipsniai, naujausi viršuje
+    var now = current && !current.done ? norm(current.title) : "", list = [];
+    Object.keys(S.prog).forEach(function (l) {
+      Object.keys(S.prog[l]).forEach(function (k) { if (l !== S.lang || k !== now) list.push({ lang: l, p: S.prog[l][k] }); });
+    });
+    list.sort(function (a, b) { return b.p.ts - a.p.ts; });
+    var sig = (S.langs ? S.langs.ts : 0) + "|" + list.map(function (x) { return x.lang + ":" + x.p.t + ":" + x.p.pct.toFixed(1); }).join("|");
     if (sig === startedSig) return;
-    startedSig = sig; $("startedBox").hidden = !keys.length; $("started").textContent = "";
-    keys.forEach(function (k) {
-      var b = document.createElement("button"), n = document.createElement("span"), pc = document.createElement("b");
-      n.textContent = all[k].t; pc.textContent = all[k].pct.toFixed(1) + " %"; b.title = "Tęsti: " + all[k].t;
-      b.appendChild(n); b.appendChild(pc); b.onclick = function () { load(all[k].t); };
+    startedSig = sig; $("startedBox").hidden = !list.length; $("started").textContent = "";
+    list.forEach(function (x) {
+      var b = document.createElement("button"), n = document.createElement("span"), lg = document.createElement("em"), pc = document.createElement("b");
+      var l = langList().filter(function (y) { return y[0] === x.lang; })[0], name = l ? l[2].charAt(0).toUpperCase() + l[2].slice(1) : x.lang;
+      n.textContent = x.p.t; n.dir = "auto"; lg.textContent = name; pc.textContent = x.p.pct.toFixed(1) + " %"; b.title = "Tęsti: " + x.p.t + " (" + name + ")";
+      b.appendChild(n); b.appendChild(lg); b.appendChild(pc);
+      b.onclick = function () { if (x.lang !== S.lang) switchLang(x.lang); load(x.p.t); };
       $("started").appendChild(b);
     });
   }
@@ -699,7 +705,7 @@
     render(); showStats();
   }
   /* premija už sunaikintą straipsnį (visi dydžiai įskaito ir šį straipsnį):
-     base × kalbos užbaigimas + base × bendras visų Vikipedijų užbaigimas + sunaikintų straipsnių skaičius.
+     base × kalbos užbaigimas + base × bendras visų Vikipedijų užbaigimas + 100 × sunaikintų straipsnių skaičius.
      base – straipsnio gyvybės; pats jis į premiją neįeina. */
   /* visų Vikipedijų: kiek straipsnių sunaikinta ir kiek jų yra (dydis žinomas tik gavus visų kalbų lentelę, kitaip 0) */
   function totals() {
@@ -720,7 +726,7 @@
   function reward(base) {
     var n = S.counts[S.lang] || 0, t = totals();
     var langShare = n ? Math.min(1, goneCount() / n) : 0;
-    return { base: base, lang: base * langShare, total: base * t.share, count: S.destroyed, langShare: langShare, totalShare: t.share };
+    return { base: base, lang: base * langShare, total: base * t.share, count: S.destroyed * 100, langShare: langShare, totalShare: t.share };
   }
   function rewardText(r) {
     var num = function (v) { return v < 100000 ? v.toLocaleString("lt-LT", { maximumFractionDigits: 2 }) : fmt(v); };
@@ -887,7 +893,11 @@
   function chooseLang(v) {
     openLangs(false);
     if (v === S.lang) return;
-    save(); current = null; S.lang = v; save(); seq++; clearTimeout(retryTimer); loading = false; queue = []; backoff = 0; $("article").dir = langDir(v); loadCount(); randomArticle();
+    switchLang(v); randomArticle();
+  }
+  /* pakeičia kalbą; kurį straipsnį atverti, nusprendžia iškvietėjas */
+  function switchLang(v) {
+    save(); current = null; S.lang = v; save(); seq++; clearTimeout(retryTimer); loading = false; queue = []; backoff = 0; $("article").dir = langDir(v); loadCount();
   }
   /* visų Vikipedijų straipsnių skaičiai vienoje viešoje lentelėje (Wikimedia Commons, atnaujinama kas kelias valandas).
      Pokytis per parą: naujausia lentelės versija palyginama su maždaug paros senumo versija iš jos istorijos. */
