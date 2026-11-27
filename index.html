@@ -948,13 +948,13 @@
   }
   /* ---------- premijos už įgūdį: +1 % greičio už kiekvieną BONUS_EVERY ištrintų (kiekvienam simboliui atskirai) ----------
      Greičiau trinami tik tos rūšies taikiniai (ir trintuko, ir paspaudimu). Gyvybės ir už jas gaunamos raidės nesikeičia. */
-  var BONUS_EVERY = { char: 10000, px: 10000000, lines: 1000, boxes: 1000 };
+  var BONUS_EVERY = { char: 10000, px: 10000000, linePx: 1000000, boxPx: 10000000 };     // linijoms skaičiuojamas ilgis, rėmeliams – plotas (pikseliais)
   function bonus(count, kind) { return Math.floor((count || 0) / BONUS_EVERY[kind]); }       // procentais
   /* kiek kartų greičiau trinamas šis taikinys */
   function speedOf(it) {
     if (it.size) return 1 + bonus(T.px, "px") / 100;
-    if (it.box) return 1 + bonus(T.boxes, "boxes") / 100;
-    if (it.len !== undefined) return 1 + bonus(T.lines, "lines") / 100;
+    if (it.box) return 1 + bonus(T.boxPx, "boxPx") / 100;
+    if (it.len !== undefined) return 1 + bonus(T.linePx, "linePx") / 100;
     if (it.word) split(it);
     var chars = it.word ? it.chars : it.mark;       // žodis ar sąrašo numeris: kiekvienam simboliui sugaištama pagal jo paties premiją
     return chars.length / chars.reduce(function (time, c) { return time + 1 / (1 + bonus(T.chars[c], "char") / 100); }, 0);
@@ -994,7 +994,7 @@
     $("statRows").textContent = "";
     var next = function (count, kind) { return "Iki kito +1 % greičio: " + n(BONUS_EVERY[kind] - count % BONUS_EVERY[kind]); };
     [["Simboliai", n(sum)], ["Žodžiai (iki galo)", n(T.words)], ["Nuotraukų pikseliai", n(T.px), "px"], ["Nuotraukos (iki galo)", n(T.images)],
-     ["Linijos", n(T.lines), "lines"], ["Linijų ilgis, px", n(T.linePx)], ["Rėmeliai", n(T.boxes), "boxes"], ["Rėmelių plotas, px", n(T.boxPx)]].forEach(function (row) {
+     ["Linijos", n(T.lines)], ["Linijų ilgis, px", n(T.linePx), "linePx"], ["Rėmeliai", n(T.boxes)], ["Rėmelių plotas, px", n(T.boxPx), "boxPx"]].forEach(function (row) {
       var tr = $("statRows").insertRow(), name = tr.insertCell(); name.textContent = row[0]; tr.insertCell().textContent = row[1];
       if (!row[2]) return;
       var tag = document.createElement("em"); tag.textContent = "+" + bonus(T[row[2]], row[2]) + " %"; name.appendChild(tag);
