@@ -230,6 +230,7 @@
       <div id="ghBox">
         <h5>Sinchronizavimas per GitHub</h5>
         <div class="sub" id="ghStatus"></div>
+        <div class="sub" id="ghWhen" hidden></div>
         <div id="ghForm">
           <input type="text" id="ghRepo" placeholder="vardas/saugykla" autocomplete="off" spellcheck="false" aria-label="GitHub saugykla">
           <input type="password" id="ghToken" placeholder="žetonas (github_pat_…)" autocomplete="off" aria-label="GitHub žetonas">
@@ -255,6 +256,7 @@
       <div class="sub" id="progTxt">–</div>
       <label class="chk"><input type="checkbox" id="follow"> Sekti trintuką (slinkti puslapį)</label>
       <div class="sub totline">Iš viso ištrinta: <b id="total">0</b></div>
+      <div class="sub" id="ghTime" hidden></div>
     </div>
     <div class="box"><h5>Patobulinimai</h5><div id="shop"></div></div>
     <div class="box">
@@ -1086,7 +1088,7 @@
      Žetonas saugomas tik šioje naršyklėje (ne progreso faile). Kad vienas kompiuteris neužrašytų kito progreso, įsimenama
      paskutinė matyta failo versija (sha): jei GitHub'e ji kita, savaime neperrašoma. */
   var GH_KEY = "wikitrintukas_github", GH_EVERY = 5 * 60000;
-  var gh = null, ghState = "checking", ghTime = 0, ghError = "", ghBusy = false, ghSent = "";
+  var gh = null, ghState = "checking", ghError = "", ghBusy = false, ghSent = "";       // gh.savedAt – kada GitHub'e paskutinį kartą atnaujintas progresas
   try { gh = JSON.parse(localStorage.getItem(GH_KEY)); } catch (e) {}
   function ghStore() { try { if (gh) localStorage.setItem(GH_KEY, JSON.stringify(gh)); else localStorage.removeItem(GH_KEY); } catch (e) {} }
   function ghProgress() { return [S.total, S.money, S.destroyed].join(":"); }
@@ -1110,16 +1112,35 @@
     if (!gh || ghBusy || frozen) return Promise.resolve();
     ghBusy = true; showGh();
     return ghRemote().then(function (remote) {
-      if (remote && remote.sha !== gh.sha && !force) { ghState = "conflict"; return; }
+      if (remote && remote.sha !== gh.sha && !force) { ghState = "conflict"; return ghWhen(); }
       var text = saveText(), sent = ghProgress();
       return toBase64(text).then(function (content) {
         return ghFetch("/contents/" + FILE_NAME, { method: "PUT", body: JSON.stringify({ message: "Progresas " + new Date().toISOString(), content: content, sha: remote ? remote.sha : undefined }) });
       }).then(function (r) {
         if (r.status === 409 || r.status === 422) { ghState = "conflict"; return; }
         if (!r.ok) throw ghFail(r);
-        return r.json().then(function (j) { gh.sha = j.content.sha; ghStore(); ghState = "on"; ghTime = Date.now(); ghSent = sent; ghError = ""; });
+        return r.json().then(function (j) { gh.sha = j.content.sha; gh.savedAt = Date.parse(((j.commit || {}).committer || {}).date) || Date.now(); ghStore(); ghState = "on"; ghSent = sent; ghError = ""; });
       });
     }).catch(function (e) { ghState = "error"; ghError = e.message; }).then(function () { ghBusy = false; showGh(); });
+  }
+  /* paskutinio progreso įrašo laikas iš saugyklos istorijos (galėjo įrašyti ir kitas kompiuteris); nepavykus lieka senas */
+  function ghWhen() {
+    return ghFetch("/commits?per_page=1&path=" + FILE_NAME).then(function (r) { return r.ok ? r.json() : []; }).then(function (list) {
+      var t = list[0] && Date.parse(list[0].commit.committer.date);
+      if (t && gh) { gh.savedAt = t; ghStore(); showGh(); }
+    }).catch(function () {});
+  }
+  function ghWhenText() {
+    if (!gh || !gh.savedAt) return "";
+    var d = new Date(gh.savedAt), p = function (x) { return (x < 10 ? "0" : "") + x; }, min = Math.max(0, Math.floor((Date.now() - gh.savedAt) / 60000));
+    var ago = min < 1 ? "ką tik" : min < 60 ? "prieš " + min + " min." : min < 1440 ? "prieš " + Math.floor(min / 60) + " val." : "prieš " + Math.floor(min / 1440) + " d.";
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes()) + " (" + ago + ")";
+  }
+  function showGhTime() {         // matoma ir dešiniajame skydelyje, neatveriant nustatymų
+    var t = ghWhenText(), text = t ? "GitHub įrašyta: " + t : "";
+    if ($("ghTime").textContent === text) return;
+    $("ghTime").textContent = text; $("ghTime").hidden = !text;
+    $("ghWhen").textContent = t ? "Paskutinis įrašas GitHub'e: " + t : ""; $("ghWhen").hidden = !t;
   }
   function ghLoad() {
     return ghRemote().then(function (remote) {
@@ -1134,6 +1155,7 @@
     if (!gh) return showGh();
     ghState = "checking"; showGh();
     ghRemote().then(function (remote) {
+      if (remote) ghWhen();
       if (remote && remote.sha !== gh.sha) return ghLoad();
       ghState = "on"; showGh(); if (!remote) return ghSave();
     }).catch(function (e) { ghState = "error"; ghError = e.message; showGh(); });
@@ -1151,18 +1173,18 @@
   }
   var ghSig = "";
   function showGh() {
-    var text, cls = "warn", buttons = [], when = ghTime ? " · įrašyta " + new Date(ghTime).toLocaleTimeString("lt-LT") : "";
+    var text, cls = "warn", buttons = [];
     var save = ["⬆ Įrašyti į GitHub dabar", function () { ghSave(); }], load = ["⬇ Įkelti iš GitHub", ghLoad], off = ["Atsijungti", function () { gh = null; ghState = "checking"; ghStore(); showGh(); }];
     if (!gh) { text = "Neprijungta. Saugyklą ir žetoną įrašykite žemiau."; cls = ""; buttons = [["🔗 Prisijungti", ghConnect]]; }
     else if (ghBusy || ghState === "checking") { text = "Jungiamasi prie " + gh.repo + "…"; cls = ""; }
-    else if (ghState === "on") { cls = "ok"; text = "✔ Sinchronizuojama su " + gh.repo + when + ". Prieš pereidami į kitą kompiuterį spauskite „Įrašyti“."; buttons = [save, load, off]; }
+    else if (ghState === "on") { cls = "ok"; text = "✔ Sinchronizuojama su " + gh.repo + ". Prieš pereidami į kitą kompiuterį spauskite „Įrašyti“."; buttons = [save, load, off]; }
     else if (ghState === "conflict") {
       text = "⚠ GitHub'e yra kito kompiuterio progresas, todėl savaime neįrašoma.";
       buttons = [load, ["⬆ Perrašyti GitHub šiuo progresu", function () { if (confirm("GitHub'e esantis progresas bus pakeistas šio kompiuterio progresu. Tęsti?")) ghSave(true); }], off];
     }
     else { text = "⚠ " + ghError; buttons = [save, load, off]; }
     $("ghForm").hidden = !!gh;
-    gearDot();
+    gearDot(); showGhTime();
     var sig = cls + text + buttons.map(function (b) { return b[0]; }).join();
     if (sig === ghSig) return;
     ghSig = sig; $("ghStatus").textContent = text; $("ghStatus").className = "sub " + cls; $("ghButtons").textContent = "";
@@ -1189,7 +1211,7 @@
     });
   }
   function render() {
-    showStarted(); drawStats(); showTotal();
+    showStarted(); drawStats(); showTotal(); showGhTime();
     /* viršuje visada matyti, kuris straipsnis trinamas (jo pavadinimas pačiame puslapyje ištrinamas pirmas) */
     var name = current ? current.title : "–", label = current && current.done ? "Sunaikinta" : "Dabar trinama";
     if ($("nowTitle").textContent !== name) { $("nowTitle").textContent = name; $("now").title = name; }
