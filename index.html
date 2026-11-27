@@ -771,20 +771,20 @@
   function totals() {
     var gone = 0, all = 0;
     Object.keys(S.gone).forEach(function (l) { gone += Object.keys(S.gone[l]).length; });
-    if (S.countsTs) langList().forEach(function (l) { all += S.counts[l[0]] || 0; });
+    if (S.countsTs) langList().forEach(function (l) { all += cnt(l[0]); });
     return { gone: gone, all: all, share: all ? Math.min(1, gone / all) : 0 };
   }
   function sharePct(share) { var p = share * 100; return (p >= 1 ? p.toFixed(2) : String(+p.toPrecision(2))).replace(".", ",") + " %"; }
   var totalSig = "";
   function showTotal() {          // perskaičiuojama tik pasikeitus sunaikintų skaičiui ar Vikipedijų dydžiams
-    var sig = [S.destroyed, S.countsTs, S.counts[S.lang], S.langs && S.langs.ts].join("|");
+    var sig = [S.destroyed, S.countsTs, cnt(S.lang), S.langs && S.langs.ts].join("|");
     if (sig === totalSig) return;
     totalSig = sig;
     var t = totals();
     $("totalDone").textContent = t.all ? "Bendras užbaigimas: " + sharePct(t.share) + " (" + t.gone.toLocaleString("lt-LT") + " iš " + (t.all / 1e6).toFixed(1).replace(".", ",") + " mln. straipsnių)" : "Bendras užbaigimas: –";
   }
   function reward(base) {
-    var n = S.counts[S.lang] || 0, t = totals();
+    var n = cnt(S.lang), t = totals();
     var langShare = n ? Math.min(1, goneCount() / n) : 0;
     return { base: base, lang: base * langShare, total: base * t.share, count: S.destroyed * 100, langShare: langShare, totalShare: t.share };
   }
@@ -878,7 +878,7 @@
       if (my !== seq) return;
       loading = false; queue = j.query.random.map(function (x) { return x.title; }).filter(function (t) { return !isGone(t); });
       if (queue.length) load(queue.shift(), true);
-      else if (S.exact && S.exact[S.lang]) lastArticles();                                                     // maža Vikipedija: likę straipsniai randami iš visų sąrašo
+      else if (S.exact[S.lang] && S.exact[S.lang].n <= SMALL) lastArticles();                                                    // maža Vikipedija: likę straipsniai randami iš visų sąrašo
       else retryTimer = setTimeout(randomArticle, 5000);          // visi 20 jau sunaikinti: imami kiti
     }).catch(function () { if (my !== seq) return; loading = false; failed(randomArticle); });
   }
@@ -901,40 +901,77 @@
     window.scrollTo(0, 0); render();
   }
 
-  /* tikras straipsnių skaičius. Vikipedijos statistika skaičiuoja tik puslapius, kuriuose yra bent viena nuoroda,
-     o atsitiktinis straipsnis imamas iš visų (be nukreipimų). Mažoms Vikipedijoms (iki EXACT_MAX puslapių) visi suskaičiuojami patys. */
-  var EXACT_MAX = 30000, allTitles = {};
-  function listAll(l) {
-    var out = [];
-    function step(cont) {
-      return fetch("https://" + l + ".wikipedia.org/w/api.php?format=json&formatversion=2&origin=*&action=query&list=allpages&apnamespace=0&apfilterredir=nonredirects&aplimit=max" + (cont ? "&apcontinue=" + encodeURIComponent(cont) : ""))
+  /* ---------- tikslus straipsnių skaičius ----------
+     S.counts – oficialus Vikipedijos skaičius: jis neįskaito puslapių be nė vienos nuorodos, o atsitiktinis straipsnis imamas iš visų (be nukreipimų).
+     Todėl kiekvienos atvertos kalbos visi straipsniai suskaičiuojami patys (list=allpages, po 500 per užklausą).
+     Didelė Vikipedija skaičiuojama fone; progresas įrašomas (S.counting), todėl nutrūkęs skaičiavimas tęsiamas nuo tos vietos.
+     S.exact[l] = { n: suskaičiuota, art: oficialus skaičius tuo metu, ts }. Kol vyksta naujas perskaičiavimas, prie n pridedamas oficialaus
+     skaičiaus pokytis nuo skaičiavimo (nauji ir ištrinti straipsniai). Perskaičiuojama: mažos kalbos kas parą, didelės kas savaitę. */
+  var SMALL = 30000, allTitles = {}, countRun = 0;
+  if (!S.exact) S.exact = {};
+  if (!S.counting) S.counting = {};
+  for (var xl in S.exact) if (S.exact[xl].art == null) delete S.exact[xl];          // ankstesnės versijos įrašai (be oficialaus skaičiaus) skaičiuojami iš naujo
+  function cnt(l) {
+    var ex = S.exact && S.exact[l], off = S.counts && S.counts[l];
+    if (!ex) return off || 0;
+    return Math.max(0, ex.n + (off ? off - ex.art : 0));
+  }
+  function isExact(l) { return !!(S.exact && S.exact[l]); }
+  function countAll(l, official) {
+    var c = S.counting[l];
+    if (!c || Date.now() - c.started > 7 * 86400000) c = S.counting[l] = { cont: "", n: 0, art: official, started: Date.now() };
+    var keep = c.n === 0 ? [] : null, run = ++countRun;        // mažos kalbos pavadinimai laikomi atmintyje (paskutiniams straipsniams rasti); tęsiant nutrūkusį – nebe visi
+    function step() {
+      if (run !== countRun || l !== S.lang) return Promise.resolve(null);          // pakeista kalba: progresas lieka, tęsiama vėliau
+      return fetch("https://" + l + ".wikipedia.org/w/api.php?format=json&formatversion=2&origin=*&action=query&list=allpages&apnamespace=0&apfilterredir=nonredirects&aplimit=max" + (c.cont ? "&apcontinue=" + encodeURIComponent(c.cont) : ""))
         .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
         .then(function (j) {
-          j.query.allpages.forEach(function (p) { out.push(p.title); });
-          if (j.continue) return step(j.continue.apcontinue);
-          allTitles[l] = out; (S.exact || (S.exact = {}))[l] = { n: out.length, ts: Date.now() }; S.counts[l] = out.length;
-          return out;
+          var pg = j.query.allpages;
+          c.n += pg.length;
+          if (keep) { pg.forEach(function (p) { keep.push(p.title); }); if (keep.length > SMALL) keep = null; }
+          if (j.continue) {
+            c.cont = j.continue.apcontinue;
+            if (c.n % 20000 < 500) save();
+            showStats();
+            return new Promise(function (ok) { setTimeout(ok, 50); }).then(step);
+          }
+          S.exact[l] = { n: c.n, art: c.art, ts: Date.now() };
+          delete S.counting[l];
+          if (keep) allTitles[l] = keep;
+          save(); showStats();
+          return keep;
+        }, function (e) {                    // tinklo klaida: bandoma dar kartą po 10 s
+          if (run !== countRun || l !== S.lang) return null;
+          return new Promise(function (ok) { setTimeout(ok, 10000); }).then(step);
         });
     }
-    return step("");
+    return step();
+  }
+  /* visų straipsnių pavadinimai (tik mažoms kalboms) */
+  function listAll(l) {
+    if (allTitles[l]) return Promise.resolve(allTitles[l]);
+    delete S.counting[l];
+    return countAll(l, S.counts[l] || 0).then(function (t) { if (!t) throw new Error("nutraukta"); return t; });
   }
 
   var articleCount = 0;
   function showStats() {
+    var l = S.lang, c = S.counting && S.counting[l];
+    articleCount = cnt(l);
     $("destroyed").textContent = fmt(S.destroyed);
-    $("wikiLeft").textContent = articleCount ? "Liko straipsnių: " + Math.max(0, articleCount - goneCount()).toLocaleString("lt-LT") + " · atlikta " + donePct(S.lang) : "";
+    $("wikiLeft").textContent = articleCount ? "Liko straipsnių: " + (isExact(l) ? "" : "≈") + Math.max(0, articleCount - goneCount()).toLocaleString("lt-LT") + " · atlikta " + donePct(l) +
+      (c && !isExact(l) ? " · tiksliai skaičiuojama, rasta: " + c.n.toLocaleString("lt-LT") : "") : "";
     buildLangs();
   }
   function loadCount() {
     var l = S.lang;
-    articleCount = (S.counts || {})[l] || 0; showStats();
-    function done() { if (l === S.lang) articleCount = S.counts[l]; save(); showStats(); }
-    var ex = S.exact && S.exact[l];
-    if (ex && Date.now() - ex.ts < 86400000) { S.counts[l] = ex.n; done(); return; }          // tikslus skaičius atnaujinamas kartą per parą
+    showStats();
     api({ action: "query", meta: "siteinfo", siprop: "statistics" }).then(function (j) {
-      var st = j.query.statistics;
-      if (st.pages > EXACT_MAX) { if (S.exact) delete S.exact[l]; S.counts[l] = st.articles; done(); return; }
-      return listAll(l).then(done);
+      if (l !== S.lang) return;
+      S.counts[l] = j.query.statistics.articles; save(); showStats();
+      var ex = S.exact[l];
+      if (ex && Date.now() - ex.ts < (ex.n <= SMALL ? 1 : 7) * 86400000) return;
+      return countAll(l, S.counts[l]);
     }).catch(function () {});
   }
 
@@ -945,18 +982,18 @@
   function langDir(code) { var x = langList().filter(function (l) { return l[0] === code; })[0]; return x && x[3] === "rtl" ? "rtl" : "ltr"; }
   /* kiek procentų tos kalbos Vikipedijos jau sunaikinta */
   function donePct(code) {
-    var g = Object.keys(S.gone[code] || {}).length, n = (S.counts || {})[code];
+    var g = Object.keys(S.gone[code] || {}).length, n = cnt(code), ap = isExact(code) ? "" : "≈";       // ≈ – kalba dar nesuskaičiuota tiksliai
     if (!g) return "0 %";
     if (!n) return g + " sunaikinta";
     var p = g / n * 100;
-    if (g >= n) return "100 %";
-    return (p >= 1 ? Math.min(99.99, p).toFixed(2) : String(+p.toPrecision(2))) + " %";      // kol bent vienas straipsnis liko, 100 % nerodoma
+    if (g >= n) return ap + "100 %";
+    return ap + (p >= 1 ? Math.min(99.99, p).toFixed(2) : String(+p.toPrecision(2))) + " %";      // kol bent vienas straipsnis liko, 100 % nerodoma
   }
   /* savas išskleidžiamas sąrašas (paprastame <select> juostų nupiešti negalima): straipsnių skaičius ir žalia sunaikintos dalies juosta */
   var langSig = "";
   function langName(l) { var local = l[2].charAt(0).toUpperCase() + l[2].slice(1); return local + (l[1].toLowerCase() !== l[2].toLowerCase() ? " – " + l[1] : ""); }
   function played(code) { return Object.keys(S.gone[code] || {}).length; }
-  function isFull(code) { var n = S.counts[code]; return !!n && played(code) >= n; }       // sunaikinti visi tos kalbos straipsniai
+  function isFull(code) { var n = cnt(code); return isExact(code) && !!n && played(code) >= n; }       // sunaikinti visi tos kalbos straipsniai (tik tiksliai suskaičiuotose)
   function buildLangs() {
     var list = langList().slice();
     if (!list.some(function (l) { return l[0] === S.lang; })) list.push([S.lang, S.lang, S.lang, "ltr"]);
@@ -967,7 +1004,7 @@
     var find = $("langFind").value.trim().toLowerCase();
     var when = function (t) { var d = new Date(t), p = function (x) { return (x < 10 ? "0" : "") + x; }; return p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes()); };
     $("langNote").textContent = S.growthTo ? "Žalias skaičius – straipsnių pokytis per parą: " + when(S.growthFrom) + " → " + when(S.growthTo) : "Paros pokytis dar negautas.";
-    var sig = find + "|" + list.length + "|" + S.lang + "|" + S.countsTs + "|" + S.growthTo + "|" + (S.counts[S.lang] || 0) + "|" + list.map(function (l) { return played(l[0]) || ""; }).join(",");
+    var sig = find + "|" + list.length + "|" + S.lang + "|" + S.countsTs + "|" + S.growthTo + "|" + cnt(S.lang) + "|" + Object.keys(S.exact || {}).length + "|" + list.map(function (l) { return played(l[0]) || ""; }).join(",");
     if (sig === langSig) return;
     langSig = sig;
     if (find) list = list.filter(function (l) { return (l[0] + " " + l[1] + " " + l[2]).toLowerCase().indexOf(find) >= 0; });
@@ -1000,12 +1037,12 @@
     return x;
   }
   function langRow(l) {
-    var row = document.createElement("button"), n = S.counts[l[0]], g = played(l[0]);
+    var row = document.createElement("button"), n = cnt(l[0]), g = played(l[0]);
     var el = function (tag, cls, text) { var x = document.createElement(tag); if (cls) x.className = cls; if (text) x.textContent = text; return x; };
     row.type = "button"; row.className = "lrow" + (l[0] === S.lang ? " cur" : "") + (isFull(l[0]) ? " full" : ""); row.dataset.code = l[0]; row.title = langName(l);
     var name = el("span", "lname"), info = el("span", "linfo"), bar = el("span", "lbar"), fill = el("i");
     name.appendChild(el("span", "", langName(l))); name.appendChild(difficulty(l));
-    var count = el("span", "", n ? "Straipsnių: " + n.toLocaleString("lt-LT") : "Straipsnių skaičius nežinomas"), up = (S.growth || {})[l[0]];
+    var count = el("span", "", n ? "Straipsnių: " + (isExact(l[0]) ? "" : "≈") + n.toLocaleString("lt-LT") : "Straipsnių skaičius nežinomas"), up = (S.growth || {})[l[0]];
     if (up) count.appendChild(el("em", up < 0 ? "down" : "", (up > 0 ? "+" : "−") + Math.abs(up).toLocaleString("lt-LT")));       // pokytis per parą
     info.appendChild(count);
     info.appendChild(el("span", "", (g ? g.toLocaleString("lt-LT") + " sunaikinta · " : "") + (g && !n ? "" : donePct(l[0]))));
@@ -1044,7 +1081,7 @@
     if (countsBusy || (S.countsTs && S.growth && Date.now() - S.countsTs < 3 * 3600000)) return;
     countsBusy = true;
     fetchTable("").then(function (now) {
-      Object.keys(now.counts).forEach(function (l) { if (!(l === S.lang && S.counts[l]) && !(S.exact && S.exact[l])) S.counts[l] = now.counts[l]; });
+      Object.keys(now.counts).forEach(function (l) { if (!(l === S.lang && S.counts[l])) S.counts[l] = now.counts[l]; });
       S.countsTs = Date.now(); save(); showStats();
       return fetchTable(new Date(now.time - 23 * 3600000).toISOString().slice(0, 19) + "Z").then(function (before) {     // paskutinė versija, senesnė nei 23 val.
         var growth = {};
