@@ -583,19 +583,26 @@
     while (pos < items.length && items[pos].hp <= 0) pos++;
     return items[pos] || null;
   }
-  /* trinama pagal tvarką (trintukai ir paspaudimas tuščioje vietoje); grąžina, kiek ištrinta */
-  function eraseNext(k) {
-    var done = 0, it;
-    while (done < k && (it = nextTarget())) done += strike(it.i, k - done);
+  /* trinama pagal tvarką (trintukai ir paspaudimas tuščioje vietoje). work – trynimo jėga (1 = viena gyvybė be premijos);
+     taikinys su greičio premija už tą pačią jėgą netenka daugiau gyvybių.
+     Grąžina, kiek gyvybių ištrinta (done) ir kiek jėgos liko, nes jos neužteko nė vienai gyvybei (rest). */
+  function eraseNext(work) {
+    var done = 0, rest = 0, it;
+    while ((it = nextTarget())) {
+      var m = speedOf(it), k = Math.floor(work * m + 1e-9);
+      if (k < 1) { rest = Math.max(0, work); break; }
+      var d = strike(it.i, k);
+      done += d; work -= d / m;
+    }
     gain(done);
-    return done;
+    return { done: done, rest: rest };
   }
 
   /* paspaudimas muša tik paspaustą taikinį: jei smūgis stipresnis už jo gyvybes, likutis niekur nepereina */
-  function eraseAt(i, k) {
-    var d = strike(i, k);
+  function eraseAt(i, work) {
+    var m = speedOf(items[i]), k = Math.floor(work * m + 1e-9), d = strike(i, k);
     gain(d);
-    return d;
+    return { done: d, rest: d < k ? 0 : Math.max(0, work - d / m) };
   }
 
   /* gyvybių juostos: ties žodžiu, ant kurio užvesta pelė, ir ties darbininkų taikiniu */
@@ -907,39 +914,43 @@
   /* smūgis, kuris įskaitomas į apskaitą (atkuriant pradėtą straipsnį naudojamas tik hit, kad nebūtų skaičiuojama antrą kartą) */
   function strike(i, k) {
     var it = items[i], before = it ? it.hp : 0, d = hit(i, k);
-    if (d > 0) S.money += record(it, before);       // premija: papildomos raidės virš ištrintų
+    if (d > 0) record(it, before);
     return d;
   }
-  /* ---------- premijos už įgūdį: +1 % už kiekvieną BONUS_EVERY ištrintų (kiekvienam simboliui atskirai) ----------
-     Didina tik gaunamas raides: trynimo greitis, gyvybės ir „Iš viso ištrinta“ nesikeičia. */
+  /* ---------- premijos už įgūdį: +1 % greičio už kiekvieną BONUS_EVERY ištrintų (kiekvienam simboliui atskirai) ----------
+     Greičiau trinami tik tos rūšies taikiniai (ir trintuko, ir paspaudimu). Gyvybės ir už jas gaunamos raidės nesikeičia. */
   var BONUS_EVERY = { char: 10000, px: 10000000, lines: 1000, boxes: 1000 };
   function bonus(count, kind) { return Math.floor((count || 0) / BONUS_EVERY[kind]); }       // procentais
-  /* įrašo smūgį į apskaitą ir grąžina už jį priklausančią premiją (pagal iki šio smūgio surinktą kiekį) */
+  /* kiek kartų greičiau trinamas šis taikinys */
+  function speedOf(it) {
+    if (it.size) return 1 + bonus(T.px, "px") / 100;
+    if (it.box) return 1 + bonus(T.boxes, "boxes") / 100;
+    if (it.len !== undefined) return 1 + bonus(T.lines, "lines") / 100;
+    if (it.word) split(it);
+    var chars = it.word ? it.chars : it.mark;       // žodis ar sąrašo numeris: kiekvienam simboliui sugaištama pagal jo paties premiją
+    return chars.length / chars.reduce(function (time, c) { return time + 1 / (1 + bonus(T.chars[c], "char") / 100); }, 0);
+  }
+  /* įrašo smūgį į apskaitą */
   function record(it, before) {
-    var was = before / it.max, now = it.hp / it.max, dead = it.hp <= 0, d = before - it.hp, extra = 0;
-    /* ištrintas simbolis: įrašomas į bendrą simbolių sąrašą, už jį – to simbolio premija nuo jo dalies elemento gyvybėse */
-    var count = function (c, share) { extra += share * bonus(T.chars[c], "char") / 100; T.chars[c] = (T.chars[c] || 0) + 1; };
+    var was = before / it.max, now = it.hp / it.max, dead = it.hp <= 0;
+    var count = function (c) { T.chars[c] = (T.chars[c] || 0) + 1; };      // ištrintas simbolis įrašomas į bendrą simbolių sąrašą
     if (it.word) {
       split(it);
-      it.order.slice(hiddenCount(it, was), hiddenCount(it, now)).forEach(function (i) { count(it.chars[i], it.max / it.chars.length); });
+      it.order.slice(hiddenCount(it, was), hiddenCount(it, now)).forEach(function (i) { count(it.chars[i]); });
       if (dead) T.words++;
     } else if (it.size) {
       var n = it.size.w * it.size.h;
-      extra = d * bonus(T.px, "px") / 100;
       T.px += Math.round((1 - now) * n) - Math.round((1 - was) * n);
       if (dead) T.images++;
     } else if (it.box) {
-      extra = d * bonus(T.boxes, "boxes") / 100;
       if (dead) { T.boxes++; T.boxPx += it.area; }
     } else if (it.len !== undefined) {
-      extra = d * bonus(T.lines, "lines") / 100;
       if (dead) { T.lines++; T.linePx += it.len; }
     } else {                                                                        // sąrašo taškas ar numeris: simboliai skaičiuojami iš kairės
       var n2 = it.mark.length;
-      it.mark.slice(n2 - Math.ceil(n2 * was), n2 - Math.ceil(n2 * now)).forEach(function (c) { count(c, it.max / n2); });
+      it.mark.slice(n2 - Math.ceil(n2 * was), n2 - Math.ceil(n2 * now)).forEach(count);
     }
     statsChanged = true;
-    return extra;
   }
   function drawStats() {
     var open = !!S.statsOpen;
@@ -952,7 +963,7 @@
     var keys = Object.keys(T.chars).sort(function (a, b) { return T.chars[b] - T.chars[a] || a.localeCompare(b, "lt"); });
     var sum = keys.reduce(function (s, c) { return s + T.chars[c]; }, 0);
     $("statRows").textContent = "";
-    var next = function (count, kind) { return "Iki kito +1 %: " + n(BONUS_EVERY[kind] - count % BONUS_EVERY[kind]); };
+    var next = function (count, kind) { return "Iki kito +1 % greičio: " + n(BONUS_EVERY[kind] - count % BONUS_EVERY[kind]); };
     [["Simboliai", n(sum)], ["Žodžiai (iki galo)", n(T.words)], ["Nuotraukų pikseliai", n(T.px), "px"], ["Nuotraukos (iki galo)", n(T.images)],
      ["Linijos", n(T.lines), "lines"], ["Linijų ilgis, px", n(T.linePx)], ["Rėmeliai", n(T.boxes), "boxes"], ["Rėmelių plotas, px", n(T.boxPx)]].forEach(function (row) {
       var tr = $("statRows").insertRow(), name = tr.insertCell(); name.textContent = row[0]; tr.insertCell().textContent = row[1];
@@ -1256,10 +1267,12 @@
   document.addEventListener("click", function (ev) {
     if (!ev.target.closest || ev.target.closest("header, aside, button") || !current || current.done) return;
     ev.preventDefault();
-    var it = itemUnder(ev), k = perClick();
+    var it = itemUnder(ev), work = perClick() + clickRest, r;
     mouseX = ev.clientX; mouseY = ev.clientY;
-    if (it && it.hp > 0) { hover = it; pop(ev.clientX, ev.clientY, eraseAt(items.indexOf(it), k)); }
-    else pop(ev.clientX, ev.clientY, eraseNext(k));
+    if (it && it.hp > 0) { hover = it; r = eraseAt(items.indexOf(it), work); }
+    else r = eraseNext(work);
+    clickRest = r.rest;       // premijos dalis, nesudaranti visos gyvybės, pereina į kitą paspaudimą
+    pop(ev.clientX, ev.clientY, r.done);
     showBar(); render();
   });
   document.addEventListener("mousedown", function (ev) { if (ev.detail > 1 && !ev.target.closest("header, aside")) ev.preventDefault(); });     // greiti paspaudimai nepažymi teksto
@@ -1279,13 +1292,12 @@
     setTimeout(function () { p.remove(); }, 650);
   }
 
-  var last = Date.now(), acc = 0, lastScroll = 0;
+  var last = Date.now(), acc = 0, clickRest = 0, lastScroll = 0;
   setInterval(function () {
     var now = Date.now(), dt = Math.min(5, (now - last) / 1000); last = now;
     if (current && !current.done) {
       acc += perSec() * dt;
-      var k = Math.floor(acc); acc -= k;
-      if (k > 0) eraseNext(k);
+      acc = eraseNext(acc).rest;
       var w = S.scroll && now - lastScroll > 700 && workerItem();          // „Sekti trintuką“: puslapis slenka paskui darbininkus
       if (w) {
         var y = w.el.getBoundingClientRect().top;
