@@ -406,8 +406,8 @@
   function goneCount() { return Object.keys(S.gone[S.lang] || {}).length; }
   function lv(id) { return S.up[id] || 0; }
   function cost(u) { return Math.ceil(u.base * Math.pow(u.grow, lv(u.id))); }
-  /* paspaudimo jėga – dešimtadalis visų trintukų jėgos (premijos taikomos smūgiui pagal taikinį, kaip ir trintukams); be trintukų – 1 */
-  function perClick() { return Math.max(1, perSec() / 10); }
+  /* paspaudimo jėga – tokia pati kaip visų trintukų per sekundę (premijos taikomos smūgiui pagal taikinį, kaip ir trintukams); be trintukų – 1 */
+  function perClick() { return Math.max(1, perSec()); }
   function perSec() { return 100 * lv("worker"); }       // vienas trintuko lygis – 100 gyvybių per sekundę
   function fmt(n) {
     if (n < 100000) return Math.floor(n).toLocaleString("lt-LT");
@@ -684,11 +684,19 @@
     return { done: done, rest: rest };
   }
 
-  /* paspaudimas muša tik paspaustą taikinį: jei smūgis stipresnis už jo gyvybes, likutis niekur nepereina */
-  function eraseAt(i, work) {
-    var m = speedOf(items[i]), k = Math.floor(work * m + 1e-9), d = strike(i, k);
-    gain(d);
-    return { done: d, rest: d < k ? 0 : Math.max(0, work - d / m) };
+  /* paspaudimas muša atsitiktinius taikinius: jei smūgis stipresnis už taikinio gyvybes, perteklius pereina kitam atsitiktiniam taikiniui,
+     kol išnaudojama visa jėga arba nebelieka taikinių. Premijos skaičiuojamos kiekvienam taikiniui atskirai, kaip ir trintukams.
+     Grąžina, kiek gyvybių ištrinta (done) ir kiek jėgos liko, nes jos neužteko nė vienai gyvybei (rest). */
+  function eraseRandom(work) {
+    var done = 0, rest = 0, it;
+    while ((it = pickRandom())) {
+      var m = speedOf(it), k = Math.floor(work * m + 1e-9);
+      if (k < 1) { rest = Math.max(0, work); break; }
+      var d = strike(it.i, k);
+      done += d; work -= d / m;
+    }
+    gain(done);
+    return { done: done, rest: rest };
   }
 
   /* gyvybių juostos: ties žodžiu, ant kurio užvesta pelė, ir ties darbininkų taikiniu */
@@ -1379,15 +1387,14 @@
     var it = itemAt(ev.target);
     return !it || it.box ? imageAt(ev.clientX, ev.clientY) || it : it;
   }
-  /* paspaudimas (bet kur, išskyrus viršų ir dešinį skydelį) visada muša atsitiktinį dar neištrintą straipsnio elementą,
-     nepriklausomai nuo to, kur paspausta ir kokia trintukų tvarka pasirinkta */
+  /* paspaudimas (bet kur, išskyrus viršų ir dešinį skydelį) visada muša atsitiktinius dar neištrintus straipsnio elementus,
+     nepriklausomai nuo to, kur paspausta ir kokia trintukų tvarka pasirinkta; perteklius pereina kitam atsitiktiniam elementui */
   document.addEventListener("click", function (ev) {
     if (!ev.target.closest || ev.target.closest("header, aside, button") || !current || current.done) return;
     ev.preventDefault();
-    var it = pickRandom(), work = perClick() + clickRest, r;
+    var work = perClick() + clickRest, r;
     mouseX = ev.clientX; mouseY = ev.clientY;
-    if (!it) return;
-    r = eraseAt(it.i, work);
+    r = eraseRandom(work);
     clickRest = r.rest;       // premijos dalis, nesudaranti visos gyvybės, pereina į kitą paspaudimą
     pop(ev.clientX, ev.clientY, r.done);
     showBar(); render();
