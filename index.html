@@ -152,8 +152,6 @@
   .box { border:1px solid var(--line); background:var(--soft); border-radius:2px; padding:12px; margin-bottom:12px; }
   .money { font:700 30px/1.1 "Segoe UI", sans-serif; font-variant-numeric:tabular-nums; }
   .sub { font-size:12px; color:var(--mute); }
-  .bar { height:8px; background:#eaecf0; border-radius:4px; overflow:hidden; margin:8px 0 4px; }
-  .bar i { display:block; height:100%; width:0; background:var(--red); }
   h5 { margin:0 0 8px; font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--mute); }
   .up { display:grid; grid-template-columns:30px 1fr auto; gap:8px; align-items:center; padding:7px 0; border-top:1px solid #eaecf0; }
   .up:first-of-type { border-top:0; }
@@ -264,9 +262,6 @@
     <div class="box">
       <div class="money" id="money">0</div>
       <div class="sub" id="totalDone">Bendras užbaigimas: –</div>
-      <div class="sub" id="rate">0 gyvybių/s · 1 už paspaudimą</div>
-      <div class="bar"><i id="prog"></i></div>
-      <div class="sub" id="progTxt">–</div>
       <label class="chk"><input type="checkbox" id="follow"> Sekti trintuką (slinkti puslapį)</label>
       <div class="sub totline">Iš viso ištrinta: <b id="total">0</b></div>
       <div class="sub" id="ghTime" hidden></div>
@@ -1312,11 +1307,6 @@
     $("orig").disabled = !current;
     $("money").textContent = fmt(S.money);
     $("total").textContent = fmt(S.total);
-    var r = perSec();
-    $("rate").textContent = (r < 10 ? Math.round(r * 10) / 10 : fmt(r)) + " gyvybių/s · " + fmt(perClick()) + " už paspaudimą";
-    var pct = full ? (1 - Math.max(0, left) / full) * 100 : 0;
-    $("prog").style.width = pct + "%";
-    $("progTxt").textContent = full ? "Šis straipsnis: " + pct.toFixed(1) + " % · liko " + fmt(Math.max(0, left)) : "–";
     [].forEach.call($("shop").children, function (row) {
       var u = SHOP.filter(function (x) { return x.id === row.dataset.id; })[0], l = lv(u.id), maxed = u.max && l >= u.max, b = row.querySelector("button");
       row.querySelector("b").textContent = u.name + (u.max ? "" : " (" + l + ")");
