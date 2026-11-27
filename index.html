@@ -259,7 +259,13 @@
         <label><input type="radio" name="order" value="top"> ⬇ Iš viršaus į apačią</label>
         <label><input type="radio" name="order" value="bottom"> ⬆ Iš apačios į viršų</label>
         <label><input type="radio" name="order" value="random"> 🎲 Atsitiktinai</label>
-        <div class="sub">Galioja trintukams (paspaudimas visada muša atsitiktinį elementą). Atsitiktinai: elementas trinamas iki 1 s (nuotrauka – iki 2 s), tada traukiamas naujas; gali iškristi ir tas pats.</div>
+        <div class="sub">Galioja trintukams. Atsitiktinai: elementas trinamas iki 1 s (nuotrauka – iki 2 s), tada traukiamas naujas; gali iškristi ir tas pats.</div>
+      </fieldset>
+      <fieldset id="clickSet">
+        <legend>Paspaudimas</legend>
+        <label><input type="radio" name="click" value="top"> ⬇ Iš eilės nuo viršaus</label>
+        <label><input type="radio" name="click" value="random"> 🎲 Atsitiktinis elementas</label>
+        <div class="sub">Paspaudimo jėga – kaip visų trintukų su premijomis. Jei jos daugiau nei taikinio gyvybių, perteklius pereina kitam elementui (kitam iš eilės arba kitam atsitiktiniam).</div>
       </fieldset>
       <fieldset id="foldSet">
         <legend>Ištrintos vietos</legend>
@@ -684,12 +690,17 @@
     return { done: done, rest: rest };
   }
 
-  /* paspaudimas muša atsitiktinius taikinius: jei smūgis stipresnis už taikinio gyvybes, perteklius pereina kitam atsitiktiniam taikiniui,
-     kol išnaudojama visa jėga arba nebelieka taikinių. Premijos skaičiuojamos kiekvienam taikiniui atskirai, kaip ir trintukams.
+  /* pirmas neištrintas elementas nuo viršaus (paspaudimo režimas „iš eilės“) */
+  function topTarget() {
+    while (pos < items.length && items[pos].hp <= 0) pos++;
+    return items[pos] || null;
+  }
+  /* paspaudimas muša taikinius pagal nustatymą S.click: iš eilės nuo viršaus arba atsitiktinius. Jei smūgis stipresnis už taikinio gyvybes,
+     perteklius pereina kitam taikiniui, kol išnaudojama visa jėga arba nebelieka taikinių. Premijos skaičiuojamos kiekvienam taikiniui atskirai, kaip ir trintukams.
      Grąžina, kiek gyvybių ištrinta (done) ir kiek jėgos liko, nes jos neužteko nė vienai gyvybei (rest). */
-  function eraseRandom(work) {
-    var done = 0, rest = 0, it;
-    while ((it = pickRandom())) {
+  function eraseClick(work) {
+    var done = 0, rest = 0, it, pick = S.click === "top" ? topTarget : pickRandom;
+    while ((it = pick())) {
       var m = speedOf(it), k = Math.floor(work * m + 1e-9);
       if (k < 1) { rest = Math.max(0, work); break; }
       var d = strike(it.i, k);
@@ -1394,7 +1405,7 @@
     ev.preventDefault();
     var work = perClick() + clickRest, r;
     mouseX = ev.clientX; mouseY = ev.clientY;
-    r = eraseRandom(work);
+    r = eraseClick(work);
     clickRest = r.rest;       // premijos dalis, nesudaranti visos gyvybės, pereina į kitą paspaudimą
     pop(ev.clientX, ev.clientY, r.done);
     showBar(); render();
@@ -1458,6 +1469,11 @@
   [].forEach.call(document.querySelectorAll("#orderSet input"), function (r) {
     r.checked = r.value === S.order;
     r.onchange = function () { S.order = r.value; randomItem = null; save(); showBar(); };
+  });
+  if (!/^(top|random)$/.test(S.click)) S.click = "random";
+  [].forEach.call(document.querySelectorAll("#clickSet input"), function (r) {
+    r.checked = r.value === S.click;
+    r.onchange = function () { S.click = r.value; clickRest = 0; save(); };
   });
   $("collapse").checked = !!S.collapse;
   $("collapse").onchange = function () { S.collapse = this.checked; if (S.collapse) { if (current) refold(); } else unfold(); save(); showBar(); };
