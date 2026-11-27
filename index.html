@@ -73,7 +73,13 @@
   #langList .lrow { display:block; width:100%; padding:5px 10px 7px; border:0; border-bottom:1px solid #eaecf0; border-radius:0; background:#fff; font-weight:400; text-align:left; line-height:1.4; }
   #langList .lrow:hover { background:var(--soft); }
   #langList .lrow.cur { background:#eaf3ff; }
-  .lname { display:block; overflow:hidden; text-overflow:ellipsis; }
+  .lname { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .lname > span:first-child { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .diff { flex:none; padding:0 6px; border-radius:8px; font-size:11px; font-weight:700; line-height:16px; white-space:nowrap; }
+  .diff.d1 { background:#dcf2e3; color:#14663a; }
+  .diff.d2 { background:#fdf0c4; color:#7a5200; }
+  .diff.d3 { background:#ffdfc2; color:#9a3b00; }
+  .diff.d4 { background:#fbd0d0; color:#9b1111; }
   .linfo { display:flex; justify-content:space-between; gap:8px; font-size:11px; color:var(--mute); font-variant-numeric:tabular-nums; }
   .lbar { display:block; height:6px; margin-top:3px; background:#eaecf0; border-radius:3px; overflow:hidden; }
   .lbar i { display:block; height:100%; width:0; background:#2e9d5b; }
@@ -871,11 +877,26 @@
     if (!box.firstChild) box.textContent = "Tokios kalbos nėra.";
     box.scrollTop = top;
   }
+  /* kalbos sunkumas pagal raštą: kiek gyvybių vidutiniškai turi viena raidė (Unicode numeris), sprendžiant iš kalbos pavadinimo ta kalba.
+     LETTER_HP – išimtys, kai straipsniai rašomi kitokiomis raidėmis nei pavadinimas. */
+  var LETTER_HP = { ja: 18000, hak: 150, "zh-min-nan": 150, cdo: 150, gn: 200 };
+  var LEVELS = [[500, "Lengva", "d1"], [2000, "Vidutinė", "d2"], [10000, "Sunki", "d3"], [Infinity, "Ekstremali", "d4"]];
+  var LATIN_HP = 108;       // vidutinė lotyniška raidė, su ja lyginama
+  function difficulty(l) {
+    var letters = l[1].split("/")[0].match(/\p{L}/gu) || [];
+    var hp = LETTER_HP[l[0]] || (letters.length ? codes(letters.join("")) / letters.length : LATIN_HP);
+    var level = LEVELS.filter(function (x) { return hp < x[0]; })[0], times = Math.round(hp / LATIN_HP);
+    var x = document.createElement("span");
+    x.className = "diff " + level[2]; x.textContent = level[1] + (times > 1 ? " ×" + times : "");
+    x.title = "Viena raidė turi apie " + Math.round(hp).toLocaleString("lt-LT") + " gyvybių (lotyniška – apie " + LATIN_HP + ")";
+    return x;
+  }
   function langRow(l) {
     var row = document.createElement("button"), n = S.counts[l[0]], g = played(l[0]);
     var el = function (tag, cls, text) { var x = document.createElement(tag); if (cls) x.className = cls; if (text) x.textContent = text; return x; };
     row.type = "button"; row.className = "lrow" + (l[0] === S.lang ? " cur" : "") + (n && g >= n ? " full" : ""); row.dataset.code = l[0]; row.title = langName(l);
-    var name = el("span", "lname", langName(l)), info = el("span", "linfo"), bar = el("span", "lbar"), fill = el("i");
+    var name = el("span", "lname"), info = el("span", "linfo"), bar = el("span", "lbar"), fill = el("i");
+    name.appendChild(el("span", "", langName(l))); name.appendChild(difficulty(l));
     var count = el("span", "", n ? "Straipsnių: " + n.toLocaleString("lt-LT") : "Straipsnių skaičius nežinomas"), up = (S.growth || {})[l[0]];
     if (up) count.appendChild(el("em", up < 0 ? "down" : "", (up > 0 ? "+" : "−") + Math.abs(up).toLocaleString("lt-LT")));       // pokytis per parą
     info.appendChild(count);
