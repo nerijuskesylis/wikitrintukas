@@ -852,6 +852,7 @@
   var langSig = "";
   function langName(l) { var local = l[2].charAt(0).toUpperCase() + l[2].slice(1); return local + (l[1].toLowerCase() !== l[2].toLowerCase() ? " – " + l[1] : ""); }
   function played(code) { return Object.keys(S.gone[code] || {}).length; }
+  function isFull(code) { var n = S.counts[code]; return !!n && played(code) >= n; }       // sunaikinti visi tos kalbos straipsniai
   function buildLangs() {
     var list = langList().slice();
     if (!list.some(function (l) { return l[0] === S.lang; })) list.push([S.lang, S.lang, S.lang, "ltr"]);
@@ -868,8 +869,11 @@
     if (find) list = list.filter(function (l) { return (l[0] + " " + l[1] + " " + l[2]).toLowerCase().indexOf(find) >= 0; });
     var box = $("langList"), top = box.scrollTop; box.textContent = "";
     var byName = function (a, b) { return a[2].localeCompare(b[2], "lt"); };
-    [["Jau žaistos", list.filter(function (l) { return played(l[0]); }).sort(function (a, b) { return played(b[0]) - played(a[0]) || byName(a, b); })],
-     [(find ? "Rasta" : "Visos kalbos") + " (" + list.filter(function (l) { return !played(l[0]); }).length + ")", list.filter(function (l) { return !played(l[0]); }).sort(byName)]].forEach(function (g) {
+    var done = list.filter(function (l) { return isFull(l[0]); }), open = list.filter(function (l) { return !isFull(l[0]); });       // užbaigtos – pačioje apačioje
+    var fresh = open.filter(function (l) { return !played(l[0]); });
+    [["Jau žaistos", open.filter(function (l) { return played(l[0]); }).sort(function (a, b) { return played(b[0]) - played(a[0]) || byName(a, b); })],
+     [(find ? "Rasta" : "Visos kalbos") + " (" + fresh.length + ")", fresh.sort(byName)],
+     ["Užbaigtos (" + done.length + ")", done.sort(byName)]].forEach(function (g) {
       if (!g[1].length) return;
       var head = document.createElement("div"); head.className = "lgroup"; head.textContent = g[0]; box.appendChild(head);
       g[1].forEach(function (l) { box.appendChild(langRow(l)); });
@@ -894,7 +898,7 @@
   function langRow(l) {
     var row = document.createElement("button"), n = S.counts[l[0]], g = played(l[0]);
     var el = function (tag, cls, text) { var x = document.createElement(tag); if (cls) x.className = cls; if (text) x.textContent = text; return x; };
-    row.type = "button"; row.className = "lrow" + (l[0] === S.lang ? " cur" : "") + (n && g >= n ? " full" : ""); row.dataset.code = l[0]; row.title = langName(l);
+    row.type = "button"; row.className = "lrow" + (l[0] === S.lang ? " cur" : "") + (isFull(l[0]) ? " full" : ""); row.dataset.code = l[0]; row.title = langName(l);
     var name = el("span", "lname"), info = el("span", "linfo"), bar = el("span", "lbar"), fill = el("i");
     name.appendChild(el("span", "", langName(l))); name.appendChild(difficulty(l));
     var count = el("span", "", n ? "Straipsnių: " + n.toLocaleString("lt-LT") : "Straipsnių skaičius nežinomas"), up = (S.growth || {})[l[0]];
