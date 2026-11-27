@@ -46,6 +46,7 @@
   /* kai rėmelyje nebelieka nė vieno taikinio, dingsta ir jis pats: linijos, fonas, lentelės kraštai, sąrašo taškai */
   #article .dead, #article .dead::before, #article .dead::after { visibility:hidden !important; border-color:transparent !important; background:transparent !important; box-shadow:none !important; outline-color:transparent !important; }
   hr.wimg { height:5px; border:0; border-top:1px solid var(--line); }
+  #article .folded { display:none !important; }     /* nustatymas „Sutraukti į viršų“: visiškai ištrintas blokas nebeužima vietos */
   .w.dmg { background-image:linear-gradient(90deg, #1d4ed8 var(--hp), #c7d2fe var(--hp)); background-size:100% 3px; background-position:0 100%; background-repeat:no-repeat; }
   .w .x { visibility:hidden; font-style:inherit; }
   /* gyvybių juostos: #hpbar – po pele, #wbar – ties taikiniu, kurį trina darbininkai */
@@ -96,9 +97,9 @@
   #gear.warn::after { content:""; position:absolute; top:-4px; right:-4px; width:11px; height:11px; border-radius:50%; background:#d97706; border:2px solid #fff; }
   #setPanel { position:absolute; top:calc(100% + 4px); right:0; width:320px; max-height:calc(100vh - 80px); overflow:auto; padding:12px; background:#fff; border:1px solid var(--line); border-radius:4px; box-shadow:0 8px 24px rgba(0,0,0,.18); }
   #setPanel[hidden] { display:none; }
-  #orderSet { display:grid; gap:6px; margin:0 0 12px; padding:0 0 12px; border:0; border-bottom:1px solid #eaecf0; }
-  #orderSet legend, #fileBox h5 { padding:0; margin:0 0 8px; font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--mute); }
-  #orderSet label { display:flex; align-items:center; gap:8px; cursor:pointer; }
+  #orderSet, #foldSet { display:grid; gap:6px; margin:0 0 12px; padding:0 0 12px; border:0; border-bottom:1px solid #eaecf0; }
+  #orderSet legend, #foldSet legend, #fileBox h5 { padding:0; margin:0 0 8px; font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--mute); }
+  #orderSet label, #foldSet label { display:flex; align-items:center; gap:8px; cursor:pointer; }
   #now { min-width:90px; flex:0 1 300px; line-height:1.3; }
   #now small { display:block; font-size:11px; color:var(--mute); }
   #now b { display:block; font:400 20px/1.3 "Linux Libertine", Georgia, "Times New Roman", serif; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -221,6 +222,11 @@
         <label><input type="radio" name="order" value="bottom"> ⬆ Iš apačios į viršų</label>
         <label><input type="radio" name="order" value="random"> 🎲 Atsitiktinai</label>
         <div class="sub">Galioja trintukams ir paspaudimui tuščioje vietoje. Atsitiktinai: elementas trinamas iki 1 s (nuotrauka – iki 2 s), tada traukiamas naujas; gali iškristi ir tas pats.</div>
+      </fieldset>
+      <fieldset id="foldSet">
+        <legend>Ištrintos vietos</legend>
+        <label><input type="checkbox" id="collapse"> ⬆ Sutraukti puslapį į viršų</label>
+        <div class="sub">Visiškai ištrintos pastraipos, sąrašai, eilutės ir nuotraukos nebeužima vietos. Dar neištrinti rėmeliai nemažinami, todėl tuščia vieta juose lieka.</div>
       </fieldset>
       <div id="fileBox">
         <h5>Progreso failas</h5>
@@ -524,13 +530,36 @@
   }
   function eachBox(el, f) { for (var p = el.parentElement; p && p !== root; p = p.parentElement) f(p); }
   function resetPage() {
-    var t = $("title"); t.hidden = false; t.removeAttribute("style"); t.classList.remove("dead"); body.classList.remove("dead");
+    var t = $("title"); t.hidden = false; t.removeAttribute("style"); t.classList.remove("dead", "folded"); body.classList.remove("dead");
   }
+  /* ---------- sutraukimas į viršų (nustatymas S.collapse) ----------
+     Paslepiami tik visiškai ištrinti blokai (pastraipa, antraštė, sąrašo punktas, lentelės eilutė, didelė nuotrauka); žodžiai ir langeliai lieka vietoje.
+     Dar neištrintas rėmelis niekada nemažinamas: nieko neslepiama jo viduje, taip pat lentelėje (ar flex, grid bloke), kurioje yra tokių rėmelių,
+     nes paslėpus gretimą turinį sumažėtų ir rėmelis. */
+  var foldDirty = true, foldTime = 0;
+  var BLOCKS = /^(block|list-item|flow-root|flex|grid|table|table-row|table-row-group|table-header-group|table-footer-group|table-caption)$/;
+  var SHARED = /^(table|inline-table|flex|inline-flex|grid|inline-grid)$/;
+  function liveBox(el) { return !!(el._item && el._item.box && el._item.hp > 0); }
+  function foldIn(el) {
+    if (el.classList.contains("folded") || liveBox(el)) return;
+    var it = el._item, display = getComputedStyle(el).display;
+    var gone = (it ? it.hp <= 0 : el._live === 0) && !el._live;       // ištrinta pats elementas ir viskas, kas jame
+    if (gone && (it && it.size ? it.size.h > 40 : BLOCKS.test(display))) { el.classList.add("folded"); return; }       // mažos nuotraukos (vėliavėlės) lieka, kad eilutė nešokinėtų
+    if (SHARED.test(display) && [].some.call(el.querySelectorAll(".wbox"), liveBox)) return;
+    [].forEach.call(el.children, foldIn);
+  }
+  function refold() {
+    foldDirty = false; foldTime = Date.now();
+    foldIn($("title"));
+    [].forEach.call(body.children, foldIn);
+  }
+  function unfold() { [].forEach.call(root.querySelectorAll(".folded"), function (el) { el.classList.remove("folded"); }); }
 
   /* parodo, kiek žodžio liko: raidės po vieną dingsta atsitiktinėse vietose, o po žodžiu lieka gyvybių juostelė; vieta puslapyje išlieka */
   function paint(it) {
     var el = it.el, share = it.hp / it.max;
     if (it.hp <= 0) {
+      foldDirty = true;
       el.classList.remove("hov");
       if (it.box) { el.classList.add("bare"); if (!el._live) el.classList.add("dead"); }      // rėmelis netenka fono ir kraštų; jo turinys, jei dar liko, lieka
       else el.style.visibility = "hidden";
@@ -1304,6 +1333,7 @@
         if (y < 90 || y > window.innerHeight - 140) { lastScroll = now; window.scrollBy({ top: y - window.innerHeight * 0.4, behavior: "smooth" }); }
       }
     } else acc = 0;
+    if (S.collapse && foldDirty && current && now - foldTime > 300) refold();
     showBar(); render();
   }, 100);
   setInterval(save, 3000);
@@ -1327,6 +1357,8 @@
     r.checked = r.value === S.order;
     r.onchange = function () { S.order = r.value; randomItem = null; save(); showBar(); };
   });
+  $("collapse").checked = !!S.collapse;
+  $("collapse").onchange = function () { S.collapse = this.checked; if (S.collapse) { if (current) refold(); } else unfold(); save(); showBar(); };
   var PANELS = [["langPanel", "#langBox", openLangs, "lang"], ["setPanel", "#setBox", openSettings, "gear"]];
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape") PANELS.forEach(function (p) { if (!$(p[0]).hidden) { p[2](false); $(p[3]).focus(); } });
