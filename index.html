@@ -195,7 +195,40 @@
   #chars div { flex-wrap:wrap; column-gap:6px; row-gap:0; min-width:0; }      /* netilpusi premija nukeliama į antrą eilutę */
   #chars em { margin-left:auto; }
   #chars span { white-space:nowrap; }
-  @media (max-width: 900px) { .layout { grid-template-columns:1fr; } aside { position:static; max-height:none; order:-1; } .head-stats { display:none; } #body .infobox, #body figure { float:none; margin:0 auto 12px; } }
+  /* lietimas: greiti bakstelėjimai netolina vaizdo, nežymi teksto ir neatveria meniu */
+  #article { touch-action:manipulation; -webkit-user-select:none; -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent; }
+  @media (hover: none) { #article { cursor:pointer; } }      /* be šito „iPhone“ neperduoda bakstelėjimo tuščioje vietoje */
+  #more { display:none; }
+  /* telefonas ir siauras langas: viršus keliomis eilutėmis, žaidimo skydelis – juosta apačioje.
+     Straipsnio elementai neslepiami ir jų rėmeliai nekeičiami, kad taikinių sąrašas būtų toks pat kaip kompiuteryje. */
+  @media (max-width: 900px) {
+    header { flex-wrap:wrap; gap:6px 8px; padding:6px 10px; }
+    .brand, .head-stats { display:none; }
+    #now { order:1; flex:1 1 0; min-width:0; }
+    #now b { font-size:17px; }
+    #setBox { order:2; margin-left:auto; position:static; }
+    header .search { order:3; flex:1 1 100%; min-width:0; max-width:none; }
+    #langBox { order:4; flex:1 1 0; position:static; }
+    #rnd { order:5; }
+    #langPanel, #setPanel { left:8px; right:8px; width:auto; max-height:calc(100vh - 150px); max-height:calc(100dvh - 150px); }
+    input[type=search], #ghForm input { font-size:16px; }      /* mažesnį šriftą „iPhone“ priartina */
+    .layout { display:block; padding:0 12px 130px; }
+    #article { overflow-x:auto; }
+    .wscroll { overflow-x:auto; clear:both; }                  /* plati lentelė slenka pati, o ne visas straipsnis */
+    #body .infobox, #body figure, #body figure.mw-halign-left, #body .thumb.tright, #body .thumb.tleft, #body .tright, #body .tleft { float:none; margin:0 auto 12px; }
+    #body table, #body div[style*="float: right"], #body div[style*="float:right"] { float:none !important; }      /* Vikipedija dalį jų padeda į šoną savo stiliumi */
+    aside { position:fixed; z-index:9; left:0; right:0; top:auto; bottom:0; max-height:75vh; max-height:75dvh; overflow:auto; overscroll-behavior:contain; padding:8px 8px calc(8px + env(safe-area-inset-bottom)); background:#fff; border-top:1px solid var(--line); box-shadow:0 -4px 16px rgba(0,0,0,.15); }
+    aside .box { padding:8px 10px; margin-bottom:8px; }
+    #more { display:block; width:100%; margin-bottom:8px; }
+    /* suskleista juosta: taškai, trintuko pirkimas ir mygtukas „daugiau“ */
+    aside:not(.open) { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:8px; align-items:center; }
+    aside:not(.open) .box { margin:0; }
+    aside:not(.open) .box:not(#moneyBox):not(#shopBox), aside:not(.open) #moneyBox > :not(#money), aside:not(.open) #shopBox h5, aside:not(.open) .up small { display:none; }
+    aside:not(.open) #moneyBox, aside:not(.open) #shopBox { border:0; background:transparent; padding:0; }
+    aside:not(.open) .money { font-size:19px; }
+    aside:not(.open) .up { grid-template-columns:auto minmax(0,1fr) auto; padding:0; }
+    aside:not(.open) #more { order:3; width:auto; margin:0; }
+  }
 </style>
 </head>
 <body>
@@ -258,15 +291,16 @@
     <div id="body"><div class="msg">Kraunama…</div></div>
   </main>
 
-  <aside>
-    <div class="box">
+  <aside id="side">
+    <button type="button" id="more" aria-expanded="false" aria-label="Rodyti daugiau">▲</button>
+    <div class="box" id="moneyBox">
       <div class="money" id="money">0</div>
       <div class="sub" id="totalDone">Bendras užbaigimas: –</div>
       <label class="chk"><input type="checkbox" id="follow"> Sekti trintuką (slinkti puslapį)</label>
       <div class="sub totline">Iš viso ištrinta: <b id="total">0</b></div>
       <div class="sub" id="ghTime" hidden></div>
     </div>
-    <div class="box"><h5>Patobulinimai</h5><div id="shop"></div></div>
+    <div class="box" id="shopBox"><h5>Patobulinimai</h5><div id="shop"></div></div>
     <div class="box">
       <button id="statsToggle" type="button" aria-controls="stats"></button>
       <div id="stats" hidden>
@@ -360,7 +394,7 @@
       var l = langList().filter(function (y) { return y[0] === x.lang; })[0], name = l ? l[2].charAt(0).toUpperCase() + l[2].slice(1) : x.lang;
       n.textContent = x.p.t; n.dir = "auto"; lg.textContent = name; pc.textContent = x.p.pct.toFixed(1) + " %"; b.title = "Tęsti: " + x.p.t + " (" + name + ")";
       b.appendChild(n); b.appendChild(lg); b.appendChild(pc);
-      b.onclick = function () { if (x.lang !== S.lang) switchLang(x.lang); load(x.p.t); };
+      b.onclick = function () { openDrawer(false); if (x.lang !== S.lang) switchLang(x.lang); load(x.p.t); };
       $("started").appendChild(b);
     });
   }
@@ -753,6 +787,14 @@
     window.scrollTo(0, 0); render();
   }
 
+  /* siaurame ekrane per plati lentelė įdedama į atskirai slenkamą juostą (pati juosta nėra taikinys) */
+  function wrapWide() {
+    [].forEach.call(body.querySelectorAll("table"), function (t) {
+      if (t.parentElement.closest("table, .wscroll") || t.getBoundingClientRect().width <= body.clientWidth + 1) return;
+      var box = document.createElement("div"); box.className = "wscroll"; t.parentNode.insertBefore(box, t); box.appendChild(t);
+    });
+  }
+
   function load(title, random) {
     if (loading) return;
     if (isGone(title)) { clearTimeout(retryTimer); if (random) randomArticle(); else showMissing(title); return; }
@@ -774,6 +816,7 @@
       current = { title: t, done: false };
       (S.last || (S.last = {}))[S.lang] = t;          // šis straipsnis atsidarys ir perkrovus puslapį
       if (S.ended) delete S.ended[S.lang];
+      if (window.matchMedia("(max-width: 900px)").matches) wrapWide();
       collect(); restore(t);
       window.scrollTo(0, 0);
       loading = false; save(); render();
@@ -1382,6 +1425,13 @@
   setInterval(save, 3000);
   window.addEventListener("pagehide", save);
 
+  /* telefone skydelis yra juosta apačioje, kurią galima išskleisti */
+  function openDrawer(open) {
+    $("side").classList.toggle("open", open); $("side").scrollTop = 0;
+    $("more").textContent = open ? "▼ Suskleisti" : "▲";
+    $("more").setAttribute("aria-expanded", open); $("more").setAttribute("aria-label", open ? "Suskleisti" : "Rodyti daugiau");
+  }
+  $("more").onclick = function () { openDrawer(!$("side").classList.contains("open")); };
   $("rnd").onclick = randomArticle;
   $("orig").onclick = function () {
     if (current) window.open("https://" + S.lang + ".wikipedia.org/wiki/" + encodeURIComponent(current.title.replace(/ /g, "_")), "_blank", "noopener");
