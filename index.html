@@ -877,8 +877,46 @@
     api({ action: "query", list: "random", rnnamespace: 0, rnlimit: 20 }).then(function (j) {
       if (my !== seq) return;
       loading = false; queue = j.query.random.map(function (x) { return x.title; }).filter(function (t) { return !isGone(t); });
-      if (queue.length) load(queue.shift(), true); else retryTimer = setTimeout(randomArticle, 5000);          // visi 20 jau sunaikinti: imami kiti
+      if (queue.length) load(queue.shift(), true);
+      else if (S.exact && S.exact[S.lang]) lastArticles();                                                     // maža Vikipedija: likę straipsniai randami iš visų sąrašo
+      else retryTimer = setTimeout(randomArticle, 5000);          // visi 20 jau sunaikinti: imami kiti
     }).catch(function () { if (my !== seq) return; loading = false; failed(randomArticle); });
+  }
+  /* mažoje Vikipedijoje atsitiktinė paieška beveik nebeduoda nesunaikintų, todėl imama iš visų puslapių sąrašo; nieko nelikus – pabaiga */
+  function lastArticles() {
+    var l = S.lang, my = ++seq; loading = true;
+    (allTitles[l] ? Promise.resolve(allTitles[l]) : listAll(l)).then(function (all) {
+      if (my !== seq) return;
+      loading = false;
+      var rest = all.filter(function (t) { return !isGone(t); });
+      if (!rest.length) return showAllGone();
+      for (var i = rest.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), x = rest[i]; rest[i] = rest[j]; rest[j] = x; }
+      queue = rest.slice(0, 20); load(queue.shift(), true);
+    }).catch(function () { if (my !== seq) return; loading = false; failed(randomArticle); });
+  }
+  function showAllGone() {
+    snapshot(); current = null; items = []; left = full = 0; hover = null; showBar();
+    resetPage(); $("title").textContent = "";
+    body.innerHTML = '<div class="msg"><b>🎉 Visa šios kalbos Vikipedija sunaikinta!</b><br>Neliko nė vieno straipsnio. Pasirink kitą kalbą viršuje.</div>';
+    window.scrollTo(0, 0); render();
+  }
+
+  /* tikras straipsnių skaičius. Vikipedijos statistika skaičiuoja tik puslapius, kuriuose yra bent viena nuoroda,
+     o atsitiktinis straipsnis imamas iš visų (be nukreipimų). Mažoms Vikipedijoms (iki EXACT_MAX puslapių) visi suskaičiuojami patys. */
+  var EXACT_MAX = 30000, allTitles = {};
+  function listAll(l) {
+    var out = [];
+    function step(cont) {
+      return fetch("https://" + l + ".wikipedia.org/w/api.php?format=json&formatversion=2&origin=*&action=query&list=allpages&apnamespace=0&apfilterredir=nonredirects&aplimit=max" + (cont ? "&apcontinue=" + encodeURIComponent(cont) : ""))
+        .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+        .then(function (j) {
+          j.query.allpages.forEach(function (p) { out.push(p.title); });
+          if (j.continue) return step(j.continue.apcontinue);
+          allTitles[l] = out; (S.exact || (S.exact = {}))[l] = { n: out.length, ts: Date.now() }; S.counts[l] = out.length;
+          return out;
+        });
+    }
+    return step("");
   }
 
   var articleCount = 0;
@@ -890,10 +928,13 @@
   function loadCount() {
     var l = S.lang;
     articleCount = (S.counts || {})[l] || 0; showStats();
+    function done() { if (l === S.lang) articleCount = S.counts[l]; save(); showStats(); }
+    var ex = S.exact && S.exact[l];
+    if (ex && Date.now() - ex.ts < 86400000) { S.counts[l] = ex.n; done(); return; }          // tikslus skaičius atnaujinamas kartą per parą
     api({ action: "query", meta: "siteinfo", siprop: "statistics" }).then(function (j) {
-      S.counts[l] = j.query.statistics.articles;
-      if (l === S.lang) articleCount = S.counts[l];
-      showStats();
+      var st = j.query.statistics;
+      if (st.pages > EXACT_MAX) { if (S.exact) delete S.exact[l]; S.counts[l] = st.articles; done(); return; }
+      return listAll(l).then(done);
     }).catch(function () {});
   }
 
@@ -1003,7 +1044,7 @@
     if (countsBusy || (S.countsTs && S.growth && Date.now() - S.countsTs < 3 * 3600000)) return;
     countsBusy = true;
     fetchTable("").then(function (now) {
-      Object.keys(now.counts).forEach(function (l) { if (!(l === S.lang && S.counts[l])) S.counts[l] = now.counts[l]; });
+      Object.keys(now.counts).forEach(function (l) { if (!(l === S.lang && S.counts[l]) && !(S.exact && S.exact[l])) S.counts[l] = now.counts[l]; });
       S.countsTs = Date.now(); save(); showStats();
       return fetchTable(new Date(now.time - 23 * 3600000).toISOString().slice(0, 19) + "Z").then(function (before) {     // paskutinė versija, senesnė nei 23 val.
         var growth = {};
